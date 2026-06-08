@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: #0b1220;
+  color: #e2e8f0;
+  /* iOS safe areas for the Capacitor build */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-500 text-white hover:bg-indigo-400 disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply btn bg-white/5 text-slate-200 hover:bg-white/10;
+  }
+  .input {
+    @apply w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100
+      placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none;
+  }
+  .card {
+    @apply rounded-xl border border-white/10 bg-white/[0.03] p-4;
+  }
+}
+
+/* Markdown prose */
+.prose-ars {
+  line-height: 1.7;
+}
+.prose-ars h1,
+.prose-ars h2,
+.prose-ars h3 {
+  @apply font-semibold text-slate-100 mt-5 mb-2;
+}
+.prose-ars h1 {
+  @apply text-xl;
+}
+.prose-ars h2 {
+  @apply text-lg;
+}
+.prose-ars p {
+  @apply my-2;
+}
+.prose-ars ul,
+.prose-ars ol {
+  @apply my-2 pl-6 list-disc;
+}
+.prose-ars ol {
+  @apply list-decimal;
+}
+.prose-ars code {
+  @apply rounded bg-black/40 px-1 py-0.5 text-xs;
+}
+.prose-ars pre {
+  @apply my-3 overflow-x-auto rounded-lg bg-black/50 p-3 text-xs;
+}
+.prose-ars a {
+  @apply text-indigo-300 underline;
+}
+.prose-ars blockquote {
+  @apply border-l-2 border-white/20 pl-3 italic text-slate-400;
+}
+.prose-ars table {
+  @apply my-3 w-full border-collapse text-sm;
+}
+.prose-ars th,
+.prose-ars td {
+  @apply border border-white/10 px-2 py-1 text-left;
+}

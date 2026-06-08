@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.env
+.env.local
+*.local
+
+# data (sqlite at any depth)
+**/data/
+*.db
+*.db-shm
+*.db-wal
+
+# tauri
+web/src-tauri/target/
+web/src-tauri/gen/
+
+# capacitor
+web/ios/
+web/android/
+web/.cap/
+
+# misc
+.DS_Store
+coverage/
