@@ -5,8 +5,8 @@
 ARS Studio is a standalone application built on the
 [Academic Research Skills](../README.md) suite. It exposes the suite's 25
 research/writing/review **modes** as a chat-style app that runs on **free open
-models** (via OpenRouter) so the AI features cost users nothing — or users can
-bring their own key.
+models** (via OpenRouter), with citation grounding, document upload, multi-format
+export, and optional fully-local inference.
 
 > AI is your copilot, not the pilot. Every citation must be verified. This is a
 > single-model adaptation of the full 13-agent suite — faithful to its rules
@@ -21,22 +21,56 @@ bring their own key.
 | **iOS / Android** | [Capacitor](https://capacitorjs.com) wraps `web/dist` |
 | **Windows / macOS / Linux** | [Tauri 2](https://tauri.app) wraps `web/dist` |
 
+## Status: what's built vs. what needs doing
+
+Legend: ✅ built & verified · 🔌 built, needs your config/secrets to activate ·
+🚧 scaffolded, needs external infra/accounts to finish.
+
+### Core app
+| Feature | Status | Notes |
+|---|---|---|
+| 25 research/writing/review modes | ✅ | Ported from `MODE_REGISTRY.md`; system-prompt contract preserves ARS rules. |
+| Email/password auth (JWT, scrypt) | ✅ | Signup, login, `/me`, session middleware. |
+| Streaming chat (SSE) | ✅ | Server proxies OpenRouter; deltas streamed to the client. |
+| Free-tier rate limiting + BYOK | ✅ | Daily per-user budget on the shared key; BYOK bypasses it. |
+| Conversation history | ✅ | Persisted in SQLite, listed in the sidebar. |
+| PWA + responsive UI | ✅ | Installable, offline shell via service worker. |
+
+### Roadmap (this pass)
+| # | Feature | Status | Notes |
+|---|---|---|---|
+| 1 | Email verification + password reset | ✅ | Single-use tokens; console mailer in dev, SMTP in prod (🔌 set `SMTP_*`). |
+| 1 | OAuth (Google / GitHub) | 🔌 | Full flow built (CSRF-safe). Activates when `*_CLIENT_ID/SECRET` are set. |
+| 2 | Document upload for review/revision | ✅ | PDF (unpdf) + text extraction; attach by id to a chat turn. |
+| 3 | **Web-search citation grounding** | ✅ | RAG pre-pass over Crossref + OpenAlex + Semantic Scholar; injects real DOIs. Works on any model. |
+| 4 | Local-model fallback | ✅ | Ollama provider (server) + cloud/local toggle in Settings. 🔌 needs Ollama running. |
+| 5 | Native builds in CI + store metadata | 🚧 | `desktop-build.yml` (Tauri matrix) + `mobile-build.yml` (Capacitor) produce **unsigned** artifacts; signing/upload need accounts + secrets. See `docs/PACKAGING.md`. |
+| 6 | Export to DOCX/LaTeX/PDF | ✅ | MD/HTML/LaTeX/RTF always available (pure converters); DOCX/PDF via pandoc when present (🔌 install pandoc), clean fallback otherwise. |
+| 7 | Analytics + edge rate limiting | ✅ | Privacy-preserving counts (no content) + token-gated `/api/metrics`; per-IP limiter on auth+AI routes. |
+
+### Honest limitations
+- This does **not** reproduce the suite's multi-agent orchestration, integrity
+  gates, or cross-model verification — those remain in the Claude Code skills.
+- Free models are weaker than frontier models; long-document modes (systematic
+  review, full pipeline) are best-effort drafts.
+- WebLLM (in-browser local inference) is not yet wired; local inference is via
+  Ollama on desktop. Native store submission needs the project owner's accounts
+  and signing secrets (documented, not automated).
+
 ## Architecture
 
 ```
 app/
-├── packages/core/   # shared TS: 25 modes (ported from MODE_REGISTRY.md),
-│                     #   ARS rules contract, OpenRouter client
-├── server/          # Hono API: email/password auth (JWT), AI proxy with
-│                     #   per-user free-tier rate limiting + BYOK, SQLite,
-│                     #   monetization config
-└── web/             # React PWA (+ src-tauri/ desktop, capacitor.config.ts mobile)
+├── packages/core/   # shared TS: 25 modes + ARS rules contract, OpenRouter +
+│                     #   Ollama clients, scholarly search, export converters
+├── server/          # Hono API: auth (+ verify/reset/OAuth), streaming AI proxy
+│                     #   (grounding, uploads, local model), rate limiting,
+│                     #   SQLite, analytics, monetization, export
+└── web/             # React + Vite + Tailwind PWA (+ src-tauri/, capacitor)
 ```
 
-The server proxies OpenRouter so the shared key is never exposed to clients.
-Signed-up users get a daily free-message budget on the shared key; adding their
-own key (stored only in their browser) removes the limit. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the request flow and
+package breakdown, and [docs/PACKAGING.md](docs/PACKAGING.md) for native builds.
 
 ## Quick start (dev)
 
@@ -50,11 +84,11 @@ pnpm dev                      # server :8787 + web :5173
 
 Open http://localhost:5173, sign up, pick a mode, start chatting.
 
-- **No `OPENROUTER_API_KEY`?** The app runs in BYOK-only mode — each user adds
-  their own free OpenRouter key in Settings.
-- **Want desktop?** `pnpm desktop` (requires the Rust toolchain).
-- **Want mobile?** `pnpm --filter ./web build && pnpm mobile:sync`, then
-  `npx cap add ios|android` and `npx cap open ios|android`.
+- **No `OPENROUTER_API_KEY`?** BYOK-only mode — add your own free key in Settings.
+- **Want grounded citations?** Toggle "Ground citations" in the composer (needs
+  outbound access to Crossref/OpenAlex/Semantic Scholar).
+- **Want offline AI?** Run [Ollama](https://ollama.com), then Settings → Local.
+- **Desktop:** `pnpm desktop` (needs Rust). **Mobile:** `pnpm --filter ./web build && pnpm mobile:sync`, then `npx cap add ios|android`.
 
 ## Monetization
 
