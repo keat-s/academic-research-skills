@@ -55,6 +55,17 @@ uploadRoutes.get("/", (c) => {
   return c.json({ uploads: stmts.uploadsByUser.all(userId) });
 });
 
+// Fetch one upload's extracted text (owner only) — used to inject document
+// context on the in-browser WebLLM path, where the server doesn't see the turn.
+uploadRoutes.get("/:id", (c) => {
+  const userId = c.get("userId") as string;
+  const row = stmts.uploadById.get(c.req.param("id"), userId) as
+    | { id: string; filename: string; text: string }
+    | undefined;
+  if (!row) return c.json({ error: "not_found" }, 404);
+  return c.json({ id: row.id, filename: row.filename, text: row.text });
+});
+
 uploadRoutes.delete("/:id", (c) => {
   const userId = c.get("userId") as string;
   stmts.deleteUpload.run(c.req.param("id"), userId);

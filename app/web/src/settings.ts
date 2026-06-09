@@ -4,11 +4,14 @@
 
 const KEY = "ars_settings";
 
+export type Provider = "openrouter" | "ollama" | "webllm";
+
 export interface LocalSettings {
   apiKey: string; // BYOK OpenRouter key (stored only in this browser)
   model: string; // preferred free model id ("" = server default)
-  provider: "openrouter" | "ollama"; // inference backend
+  provider: Provider; // inference backend
   localModel: string; // Ollama model name when provider === "ollama"
+  webllmModel: string; // WebLLM model id when provider === "webllm"
   grounding: boolean; // default citation-grounding toggle
 }
 
@@ -17,6 +20,7 @@ const DEFAULTS: LocalSettings = {
   model: "",
   provider: "openrouter",
   localModel: "",
+  webllmModel: "",
   grounding: false,
 };
 

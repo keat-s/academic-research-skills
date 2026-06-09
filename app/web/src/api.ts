@@ -94,7 +94,27 @@ export const api = {
   localModels: () =>
     jsonFetch<{ models: string[]; available: boolean; base: string }>("/ai/local-models"),
 
+  // Scholarly retrieval only (for the client-side WebLLM grounding path).
+  search: (query: string, limit = 6) =>
+    jsonFetch<{ sources: SourceRef[] }>("/ai/search", {
+      method: "POST",
+      body: JSON.stringify({ query, limit }),
+    }).then((r) => r.sources),
+  // Persist an exchange generated in-browser.
+  saveExchange: (body: {
+    conversationId?: string;
+    modeId: string;
+    userText: string;
+    assistantText: string;
+  }) =>
+    jsonFetch<{ conversationId: string }>("/ai/save", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   uploads: () => jsonFetch<{ uploads: UploadInfo[] }>("/uploads").then((r) => r.uploads),
+  uploadText: (id: string) =>
+    jsonFetch<{ id: string; filename: string; text: string }>(`/uploads/${id}`),
   deleteUpload: (id: string) => jsonFetch<{ ok: boolean }>(`/uploads/${id}`, { method: "DELETE" }),
   uploadFile: async (file: File): Promise<UploadInfo> => {
     const fd = new FormData();

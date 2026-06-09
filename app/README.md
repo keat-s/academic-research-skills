@@ -43,7 +43,7 @@ Legend: ✅ built & verified · 🔌 built, needs your config/secrets to activat
 | 1 | OAuth (Google / GitHub) | 🔌 | Full flow built (CSRF-safe). Activates when `*_CLIENT_ID/SECRET` are set. |
 | 2 | Document upload for review/revision | ✅ | PDF (unpdf) + text extraction; attach by id to a chat turn. |
 | 3 | **Web-search citation grounding** | ✅ | RAG pre-pass over Crossref + OpenAlex + Semantic Scholar; injects real DOIs. Works on any model. |
-| 4 | Local-model fallback | ✅ | Ollama provider (server) + cloud/local toggle in Settings. 🔌 needs Ollama running. |
+| 4 | Local-model fallback | ✅ | **In-browser WebLLM** (WebGPU, fully client-side, no key/quota) **and** Ollama (desktop). Three-way backend toggle in Settings. |
 | 5 | Native builds in CI + store metadata | 🚧 | `desktop-build.yml` (Tauri matrix) + `mobile-build.yml` (Capacitor) produce **unsigned** artifacts; signing/upload need accounts + secrets. See `docs/PACKAGING.md`. |
 | 6 | Export to DOCX/LaTeX/PDF | ✅ | MD/HTML/LaTeX/RTF always available (pure converters); DOCX/PDF via pandoc when present (🔌 install pandoc), clean fallback otherwise. |
 | 7 | Analytics + edge rate limiting | ✅ | Privacy-preserving counts (no content) + token-gated `/api/metrics`; per-IP limiter on auth+AI routes. |
@@ -53,9 +53,10 @@ Legend: ✅ built & verified · 🔌 built, needs your config/secrets to activat
   gates, or cross-model verification — those remain in the Claude Code skills.
 - Free models are weaker than frontier models; long-document modes (systematic
   review, full pipeline) are best-effort drafts.
-- WebLLM (in-browser local inference) is not yet wired; local inference is via
-  Ollama on desktop. Native store submission needs the project owner's accounts
-  and signing secrets (documented, not automated).
+- In-browser WebLLM needs a WebGPU-capable browser and downloads model weights
+  (0.9–3.7 GB) on first use; small models fit modest GPUs. Native store
+  submission needs the project owner's accounts and signing secrets (documented,
+  not automated).
 
 ## Architecture
 
@@ -87,7 +88,8 @@ Open http://localhost:5173, sign up, pick a mode, start chatting.
 - **No `OPENROUTER_API_KEY`?** BYOK-only mode — add your own free key in Settings.
 - **Want grounded citations?** Toggle "Ground citations" in the composer (needs
   outbound access to Crossref/OpenAlex/Semantic Scholar).
-- **Want offline AI?** Run [Ollama](https://ollama.com), then Settings → Local.
+- **Want offline AI?** Settings → In-browser (WebGPU, downloads a model once) or
+  Ollama (run [Ollama](https://ollama.com) locally).
 - **Desktop:** `pnpm desktop` (needs Rust). **Mobile:** `pnpm --filter ./web build && pnpm mobile:sync`, then `npx cap add ios|android`.
 
 ## Monetization

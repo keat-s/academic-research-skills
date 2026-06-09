@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { loadSettings, saveSettings } from "../settings";
+import { WEBLLM_MODELS, isWebGpuAvailable } from "../webllm";
 import type { ModelInfo } from "@ars/core";
 
 export function Settings() {
@@ -13,6 +14,7 @@ export function Settings() {
   const [localAvailable, setLocalAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const [resent, setResent] = useState(false);
+  const webgpu = isWebGpuAvailable();
 
   useEffect(() => {
     api.models().then((r) => setModels(r.models)).catch(() => {});
@@ -66,50 +68,86 @@ export function Settings() {
 
       <section className="card mt-4 space-y-3">
         <h2 className="font-semibold text-slate-200">Inference backend</h2>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
-            className={settings.provider === "openrouter" ? "btn-primary flex-1" : "btn-ghost flex-1"}
+            className={settings.provider === "openrouter" ? "btn-primary" : "btn-ghost"}
             onClick={() => update({ provider: "openrouter" })}
           >
-            Cloud (free models)
+            Cloud
           </button>
           <button
-            className={settings.provider === "ollama" ? "btn-primary flex-1" : "btn-ghost flex-1"}
+            className={settings.provider === "webllm" ? "btn-primary" : "btn-ghost"}
+            onClick={() => update({ provider: "webllm" })}
+            disabled={!webgpu}
+            title={webgpu ? "" : "Needs a WebGPU-capable browser"}
+          >
+            In-browser{webgpu ? "" : " — n/a"}
+          </button>
+          <button
+            className={settings.provider === "ollama" ? "btn-primary" : "btn-ghost"}
             onClick={() => update({ provider: "ollama" })}
             disabled={!localAvailable}
             title={localAvailable ? "" : "Start Ollama locally to enable"}
           >
-            Local (Ollama){localAvailable ? "" : " — offline"}
+            Ollama{localAvailable ? "" : " — off"}
           </button>
         </div>
 
-        {settings.provider === "openrouter" ? (
-          <select className="input" value={settings.model} onChange={(e) => update({ model: e.target.value })}>
-            <option value="">Server default (free)</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-                {m.free ? "" : " (paid — needs your key)"}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            className="input"
-            value={settings.localModel}
-            onChange={(e) => update({ localModel: e.target.value })}
-          >
-            <option value="">Choose a local model…</option>
-            {localModels.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+        {settings.provider === "openrouter" && (
+          <>
+            <select className="input" value={settings.model} onChange={(e) => update({ model: e.target.value })}>
+              <option value="">Server default (free)</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.free ? "" : " (paid — needs your key)"}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">Free open models, proxied through the server.</p>
+          </>
         )}
-        <p className="text-xs text-slate-500">
-          Local inference runs fully on your machine via Ollama — private, no key, no daily limit.
-        </p>
+
+        {settings.provider === "webllm" && (
+          <>
+            <select
+              className="input"
+              value={settings.webllmModel}
+              onChange={(e) => update({ webllmModel: e.target.value })}
+            >
+              <option value="">Choose a model to download…</option>
+              {WEBLLM_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label} — ~{Math.round(m.sizeMB)} MB
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              Runs entirely in your browser via WebGPU — fully private, no key, no limit. The model
+              downloads once on first use (cached afterward); larger models need more GPU memory.
+            </p>
+          </>
+        )}
+
+        {settings.provider === "ollama" && (
+          <>
+            <select
+              className="input"
+              value={settings.localModel}
+              onChange={(e) => update({ localModel: e.target.value })}
+            >
+              <option value="">Choose a local model…</option>
+              {localModels.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500">
+              Runs on your machine via Ollama — private, no key, no daily limit.
+            </p>
+          </>
+        )}
       </section>
 
       <section className="card mt-4 space-y-2">

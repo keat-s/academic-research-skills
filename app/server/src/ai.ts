@@ -7,6 +7,7 @@ import {
   streamOllama,
   listOllamaModels,
   fetchFreeModels,
+  searchScholarly,
   DEFAULT_FREE_MODELS,
   DEFAULT_MODEL,
   type ChatMessage,
@@ -43,6 +44,44 @@ aiRoutes.get("/models", async (c) => {
 aiRoutes.get("/local-models", async (c) => {
   const models = await listOllamaModels(env.ollamaUrl);
   return c.json({ models, available: models.length > 0, base: env.ollamaUrl });
+});
+
+// Scholarly retrieval only (no LLM, no quota). Powers citation grounding for
+// the in-browser WebLLM path, where generation happens client-side.
+aiRoutes.post("/search", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const query = String(body.query ?? "").trim();
+  if (!query) return c.json({ sources: [] });
+  const sources = await searchScholarly(query.slice(0, 300), { limit: Number(body.limit ?? 6) });
+  return c.json({ sources });
+});
+
+// Persist a completed exchange produced client-side (WebLLM). No quota: the
+// user's own device did the inference.
+aiRoutes.post("/save", async (c) => {
+  const userId = c.get("userId") as string;
+  const body = (await c.req.json().catch(() => null)) as
+    | { conversationId?: string; modeId: string; userText: string; assistantText: string }
+    | null;
+  if (!body || !body.modeId || typeof body.assistantText !== "string") {
+    return c.json({ error: "bad_request" }, 400);
+  }
+  let conversationId = body.conversationId;
+  const now = Date.now();
+  if (!conversationId) {
+    conversationId = randomUUID();
+    const title = (body.userText || "New chat").slice(0, 80);
+    stmts.insertConversation.run(conversationId, userId, body.modeId, title, now, now);
+  } else if (!stmts.conversationById.get(conversationId, userId)) {
+    return c.json({ error: "not_found" }, 404);
+  }
+  if (body.userText) {
+    stmts.insertMessage.run(randomUUID(), conversationId, "user", body.userText, now);
+  }
+  stmts.insertMessage.run(randomUUID(), conversationId, "assistant", body.assistantText, now + 1);
+  stmts.touchConversation.run(now + 1, conversationId);
+  track("chat", { userId, modeId: body.modeId, meta: { provider: "webllm" } });
+  return c.json({ conversationId });
 });
 
 aiRoutes.get("/quota", (c) => {

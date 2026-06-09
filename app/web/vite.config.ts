@@ -25,6 +25,12 @@ export default defineConfig({
           { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
+      workbox: {
+        // The WebLLM engine is a large, on-demand chunk — don't precache it
+        // (it's lazy-loaded only when a user picks the in-browser backend).
+        globIgnores: ["**/webllm-engine*.js"],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
     }),
   ],
   server: {
@@ -33,5 +39,17 @@ export default defineConfig({
       "/api": { target: API_TARGET, changeOrigin: true },
     },
   },
-  build: { outDir: "dist", sourcemap: true },
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // Pin the WebLLM engine to a stable chunk name so the service worker
+        // can reliably exclude it from precache.
+        manualChunks(id) {
+          if (id.includes("@mlc-ai/web-llm")) return "webllm-engine";
+        },
+      },
+    },
+  },
 });

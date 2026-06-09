@@ -274,6 +274,13 @@ function ChatView({
           {chat.status === "grounding" && (
             <div className="my-2 text-sm text-indigo-300">🔎 Searching scholarly databases…</div>
           )}
+          {chat.status?.startsWith("loading_model") && (
+            <div className="my-2 text-sm text-indigo-300">
+              ⬇️ Loading local model{" "}
+              {chat.status.includes(":") ? `(${chat.status.split(":")[1]}%)` : "…"} — first run
+              downloads weights, then it's cached.
+            </div>
+          )}
 
           {chat.error && (
             <div className="card mt-3 border-rose-500/40 text-sm text-rose-300">

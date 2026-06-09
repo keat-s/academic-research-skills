@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { ChatMessage } from "@ars/core";
-import { streamChat, type SourceRef } from "./api";
+import { streamChat, type SourceRef, type ChatStreamHandlers } from "./api";
 import { loadSettings } from "./settings";
 
 export interface UiMessage extends ChatMessage {
@@ -58,21 +58,12 @@ export function useChat(modeId: string): UseChat {
       setMessages([...history, { role: "assistant", content: "" }]);
       setStreaming(true);
 
-      const { apiKey, model, provider, localModel, grounding } = loadSettings();
-      const useLocal = provider === "ollama";
+      const { apiKey, model, provider, localModel, webllmModel, grounding } = loadSettings();
+      const useOllama = provider === "ollama";
+      const useWebllm = provider === "webllm";
+      const useGrounding = opts.grounding ?? grounding;
 
-      abortRef.current = streamChat(
-        {
-          modeId,
-          conversationId: conversationId ?? undefined,
-          messages: history,
-          model: useLocal ? localModel || undefined : model || undefined,
-          apiKey: useLocal ? undefined : apiKey || undefined,
-          provider,
-          grounding: opts.grounding ?? grounding,
-          uploadIds: opts.uploadIds,
-        },
-        {
+      const handlers: ChatStreamHandlers = {
           onMeta: (m) => setConversationId(m.conversationId),
           onStatus: (s) => setStatus(s.phase),
           onSources: (s) =>
@@ -99,7 +90,7 @@ export function useChat(modeId: string): UseChat {
             setStreaming(false);
             setStatus(null);
           },
-          onError: (msg) => {
+          onError: (msg: string) => {
             setError(msg);
             setStreaming(false);
             setStatus(null);
@@ -112,8 +103,39 @@ export function useChat(modeId: string): UseChat {
               return prev;
             });
           },
-        }
-      );
+      };
+
+      if (useWebllm) {
+        // Fully client-side generation (WebGPU); server only retrieves +
+        // persists. Lazy-imported so the heavy engine isn't in the main bundle.
+        import("./webllmTurn").then(({ runWebLLMTurn }) => {
+          abortRef.current = runWebLLMTurn(
+            {
+              modeId,
+              conversationId: conversationId ?? undefined,
+              messages: history,
+              webllmModel: webllmModel || "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+              grounding: useGrounding,
+              uploadIds: opts.uploadIds,
+            },
+            handlers
+          );
+        });
+      } else {
+        abortRef.current = streamChat(
+          {
+            modeId,
+            conversationId: conversationId ?? undefined,
+            messages: history,
+            model: useOllama ? localModel || undefined : model || undefined,
+            apiKey: useOllama ? undefined : apiKey || undefined,
+            provider: useOllama ? "ollama" : "openrouter",
+            grounding: useGrounding,
+            uploadIds: opts.uploadIds,
+          },
+          handlers
+        );
+      }
     },
     [messages, streaming, modeId, conversationId]
   );
