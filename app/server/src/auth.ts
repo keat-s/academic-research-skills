@@ -4,7 +4,9 @@ import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from "node:crypt
 import type { Context, Next } from "hono";
 import type { Env } from "./types.js";
 import { env } from "./env.js";
-import { db, stmts, type UserRow } from "./db.js";
+import { stmts, type UserRow, type TokenRow } from "./db.js";
+import { sendMail, verificationEmail, resetEmail } from "./mail.js";
+import { track } from "./analytics.js";
 
 const secret = new TextEncoder().encode(env.jwtSecret);
 const TOKEN_TTL = "30d";
@@ -24,12 +26,24 @@ function verifyPassword(password: string, stored: string): boolean {
   return keyBuf.length === derived.length && timingSafeEqual(keyBuf, derived);
 }
 
-async function issueToken(userId: string): Promise<string> {
+export async function issueToken(userId: string): Promise<string> {
   return new SignJWT({ sub: userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(TOKEN_TTL)
     .sign(secret);
+}
+
+function createTokenRecord(userId: string, kind: "verify" | "reset", ttlMs: number): string {
+  const token = randomBytes(32).toString("base64url");
+  stmts.insertToken.run(token, userId, kind, Date.now() + ttlMs);
+  return token;
+}
+
+async function sendVerification(userId: string, email: string): Promise<void> {
+  const token = createTokenRecord(userId, "verify", 7 * 24 * 60 * 60_000);
+  const link = `${env.webUrl}/verify?token=${token}`;
+  await sendMail({ to: email, ...verificationEmail(link) });
 }
 
 export interface AuthedVars {
@@ -51,8 +65,13 @@ export async function requireAuth(c: Context<Env>, next: Next) {
   }
 }
 
-function publicUser(u: UserRow) {
-  return { id: u.id, email: u.email, displayName: u.display_name };
+export function publicUser(u: UserRow) {
+  return {
+    id: u.id,
+    email: u.email,
+    displayName: u.display_name,
+    emailVerified: !!u.email_verified,
+  };
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -71,8 +90,62 @@ authRoutes.post("/signup", async (c) => {
 
   const id = randomUUID();
   stmts.insertUser.run(id, email, hashPassword(password), displayName, Date.now());
+  await sendVerification(id, email).catch(() => {});
+  track("signup", { userId: id });
   const token = await issueToken(id);
-  return c.json({ token, user: { id, email, displayName } }, 201);
+  return c.json({ token, user: { id, email, displayName, emailVerified: false } }, 201);
+});
+
+// --- email verification ---
+authRoutes.post("/verify", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const token = String(body.token ?? "");
+  const row = stmts.getToken.get(token, "verify") as TokenRow | undefined;
+  if (!row || row.expires_at < Date.now()) return c.json({ error: "invalid_or_expired" }, 400);
+  stmts.setEmailVerified.run(row.user_id);
+  stmts.deleteToken.run(token);
+  track("email_verified", { userId: row.user_id });
+  return c.json({ ok: true });
+});
+
+authRoutes.post("/resend-verification", requireAuth, async (c) => {
+  const userId = c.get("userId") as string;
+  const user = stmts.userById.get(userId) as UserRow | undefined;
+  if (!user) return c.json({ error: "not_found" }, 404);
+  if (user.email_verified) return c.json({ ok: true, already: true });
+  stmts.deleteUserTokens.run(userId, "verify");
+  await sendVerification(userId, user.email).catch(() => {});
+  return c.json({ ok: true });
+});
+
+// --- password reset ---
+authRoutes.post("/request-reset", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const user = stmts.userByEmail.get(email) as UserRow | undefined;
+  // Always 200 to avoid account enumeration.
+  if (user) {
+    stmts.deleteUserTokens.run(user.id, "reset");
+    const token = createTokenRecord(user.id, "reset", 60 * 60_000);
+    const link = `${env.webUrl}/reset?token=${token}`;
+    await sendMail({ to: user.email, ...resetEmail(link) }).catch(() => {});
+  }
+  return c.json({ ok: true });
+});
+
+authRoutes.post("/reset", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const token = String(body.token ?? "");
+  const password = String(body.password ?? "");
+  if (password.length < 8) return c.json({ error: "password_too_short" }, 400);
+  const row = stmts.getToken.get(token, "reset") as TokenRow | undefined;
+  if (!row || row.expires_at < Date.now()) return c.json({ error: "invalid_or_expired" }, 400);
+  stmts.setPassword.run(hashPassword(password), row.user_id);
+  stmts.deleteToken.run(token);
+  track("password_reset", { userId: row.user_id });
+  const jwt = await issueToken(row.user_id);
+  const user = stmts.userById.get(row.user_id) as UserRow;
+  return c.json({ token: jwt, user: publicUser(user) });
 });
 
 authRoutes.post("/login", async (c) => {

@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import {
   systemPromptFor,
   streamChat,
+  streamOllama,
+  listOllamaModels,
   fetchFreeModels,
   DEFAULT_FREE_MODELS,
   DEFAULT_MODEL,
@@ -13,6 +15,9 @@ import { env, hasSharedKey } from "./env.js";
 import { stmts } from "./db.js";
 import { requireAuth } from "./auth.js";
 import { consume, getQuota } from "./ratelimit.js";
+import { ground } from "./grounding.js";
+import { loadUploadTexts } from "./uploads.js";
+import { track } from "./analytics.js";
 import type { Env } from "./types.js";
 
 export const aiRoutes = new Hono<Env>();
@@ -33,6 +38,11 @@ aiRoutes.get("/models", async (c) => {
     modelCache = { at: now, data };
   }
   return c.json({ models: modelCache.data, sharedKey: true });
+});
+
+aiRoutes.get("/local-models", async (c) => {
+  const models = await listOllamaModels(env.ollamaUrl);
+  return c.json({ models, available: models.length > 0, base: env.ollamaUrl });
 });
 
 aiRoutes.get("/quota", (c) => {
@@ -67,6 +77,9 @@ interface ChatBody {
   model?: string;
   apiKey?: string; // BYOK
   temperature?: number;
+  grounding?: boolean; // run the scholarly-search citation pre-pass
+  uploadIds?: string[]; // attach extracted text from prior uploads
+  provider?: "openrouter" | "ollama"; // "ollama" routes to a local model
 }
 
 /**
@@ -84,10 +97,12 @@ aiRoutes.post("/chat", async (c) => {
   const system = systemPromptFor(body.modeId);
   if (!system) return c.json({ error: "unknown_mode" }, 400);
 
+  const usingLocal = body.provider === "ollama";
   const usingByok = typeof body.apiKey === "string" && body.apiKey.length > 0;
   const apiKey = usingByok ? body.apiKey! : env.openrouterKey;
 
-  if (!usingByok) {
+  // Local (Ollama) inference is the user's own compute — no key, no quota.
+  if (!usingLocal && !usingByok) {
     if (!hasSharedKey) {
       return c.json({ error: "no_shared_key", message: "Add your own OpenRouter key to chat." }, 402);
     }
@@ -98,9 +113,24 @@ aiRoutes.post("/chat", async (c) => {
       );
     }
   }
+  track("chat", { userId, modeId: body.modeId, meta: { grounding: !!body.grounding, provider: body.provider ?? "openrouter" } });
 
   const model = body.model || DEFAULT_MODEL;
   const messages: ChatMessage[] = [{ role: "system", content: system }, ...body.messages];
+
+  // Attach extracted text from uploaded documents (kept server-side).
+  if (Array.isArray(body.uploadIds) && body.uploadIds.length > 0) {
+    const docs = loadUploadTexts(userId, body.uploadIds);
+    if (docs.length > 0) {
+      const block = docs
+        .map((d) => `--- DOCUMENT: ${d.filename} ---\n${d.text}`)
+        .join("\n\n");
+      messages.splice(1, 0, {
+        role: "system",
+        content: `The user attached the following document(s). Use them as the primary material:\n\n${block}`,
+      });
+    }
+  }
 
   // Ensure a conversation row exists, persist the latest user turn.
   let conversationId = body.conversationId;
@@ -122,15 +152,34 @@ aiRoutes.post("/chat", async (c) => {
 
   return streamSSE(c, async (stream) => {
     await stream.writeSSE({ event: "meta", data: JSON.stringify({ conversationId, model }) });
-    let full = "";
     const ac = new AbortController();
     stream.onAbort(() => ac.abort());
+
+    // Optional citation-grounding pre-pass: retrieve real sources and inject
+    // them before the system prompt's downstream content.
+    if (body.grounding) {
+      await stream.writeSSE({ event: "status", data: JSON.stringify({ phase: "grounding" }) });
+      try {
+        const { sources, contextMessage, queries } = await ground(apiKey, model, body.messages, ac.signal);
+        if (contextMessage) messages.splice(1, 0, contextMessage);
+        await stream.writeSSE({ event: "sources", data: JSON.stringify({ sources, queries }) });
+      } catch {
+        await stream.writeSSE({ event: "status", data: JSON.stringify({ phase: "grounding_skipped" }) });
+      }
+    }
+
+    const source =
+      body.provider === "ollama"
+        ? streamOllama(env.ollamaUrl, { model, messages, temperature: body.temperature ?? 0.4 }, ac.signal)
+        : streamChat(
+            { apiKey, referer: env.publicUrl, title: "ARS Studio" },
+            { model, messages, temperature: body.temperature ?? 0.4 },
+            ac.signal
+          );
+
+    let full = "";
     try {
-      for await (const chunk of streamChat(
-        { apiKey, referer: env.publicUrl, title: "ARS Studio" },
-        { model, messages, temperature: body.temperature ?? 0.4 },
-        ac.signal
-      )) {
+      for await (const chunk of source) {
         if (chunk.delta) {
           full += chunk.delta;
           await stream.writeSSE({ event: "delta", data: JSON.stringify({ t: chunk.delta }) });

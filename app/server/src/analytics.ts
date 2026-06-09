@@ -1,0 +1,28 @@
+import { stmts } from "./db.js";
+
+// Privacy-preserving event logging. We never store message content, prompts,
+// or document text here — only coarse counters (what happened, which mode).
+export function track(
+  name: string,
+  opts: { userId?: string | null; modeId?: string | null; meta?: Record<string, unknown> } = {}
+): void {
+  try {
+    stmts.insertEvent.run(
+      opts.userId ?? null,
+      name,
+      opts.modeId ?? null,
+      opts.meta ? JSON.stringify(opts.meta).slice(0, 500) : null,
+      Date.now()
+    );
+  } catch {
+    // Analytics must never break a request.
+  }
+}
+
+export function summary(sinceMs: number): { name: string; n: number }[] {
+  try {
+    return stmts.eventCounts.all(Date.now() - sinceMs) as { name: string; n: number }[];
+  } catch {
+    return [];
+  }
+}

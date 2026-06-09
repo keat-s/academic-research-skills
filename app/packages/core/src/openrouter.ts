@@ -125,3 +125,31 @@ export async function* streamChat(
   }
   yield { delta: "", done: true };
 }
+
+/** Non-streaming completion. Used for short internal calls (e.g. query generation). */
+export async function chatComplete(
+  opts: OpenRouterOpts,
+  body: { model: string; messages: ChatMessage[]; temperature?: number; maxTokens?: number },
+  signal?: AbortSignal
+): Promise<string> {
+  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    method: "POST",
+    headers: headers(opts),
+    body: JSON.stringify({
+      model: body.model,
+      messages: body.messages,
+      temperature: body.temperature ?? 0.2,
+      max_tokens: body.maxTokens,
+      stream: false,
+    }),
+    signal,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 500)}`);
+  }
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return json.choices?.[0]?.message?.content ?? "";
+}
