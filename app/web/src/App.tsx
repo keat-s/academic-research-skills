@@ -5,6 +5,7 @@ import { AuthPage } from "./pages/Auth";
 import { Studio } from "./pages/Studio";
 import { Support } from "./pages/Support";
 import { Settings } from "./pages/Settings";
+import { VerifyPage, ResetPage, OAuthCallbackPage } from "./pages/AuthFlows";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -56,6 +57,10 @@ export function App() {
           </Protected>
         }
       />
+      {/* Public auth-flow routes (links arrive from email / OAuth redirects). */}
+      <Route path="/verify" element={<VerifyPage />} />
+      <Route path="/reset" element={<ResetPage />} />
+      <Route path="/oauth" element={<OAuthCallbackPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

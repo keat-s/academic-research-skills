@@ -7,9 +7,18 @@ const KEY = "ars_settings";
 export interface LocalSettings {
   apiKey: string; // BYOK OpenRouter key (stored only in this browser)
   model: string; // preferred free model id ("" = server default)
+  provider: "openrouter" | "ollama"; // inference backend
+  localModel: string; // Ollama model name when provider === "ollama"
+  grounding: boolean; // default citation-grounding toggle
 }
 
-const DEFAULTS: LocalSettings = { apiKey: "", model: "" };
+const DEFAULTS: LocalSettings = {
+  apiKey: "",
+  model: "",
+  provider: "openrouter",
+  localModel: "",
+  grounding: false,
+};
 
 export function loadSettings(): LocalSettings {
   try {

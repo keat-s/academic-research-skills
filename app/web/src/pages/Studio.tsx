@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Mode } from "@ars/core";
-import { api, type Conversation } from "../api";
+import { api, type Conversation, type UploadInfo } from "../api";
 import { useAuth } from "../auth";
 import { useChat, type UiMessage } from "../useChat";
+import { loadSettings } from "../settings";
 import { Markdown } from "../components/Markdown";
 import { AdSlot } from "../components/AdSlot";
+import { SourcesList, ExportMenu } from "../components/MessageExtras";
 
 const SKILL_LABELS: Record<string, string> = {
   "deep-research": "Deep Research",
@@ -207,7 +209,11 @@ function ChatView({
   userName: string | null;
 }) {
   const [input, setInput] = useState("");
+  const [grounding, setGrounding] = useState(loadSettings().grounding);
+  const [attachments, setAttachments] = useState<UploadInfo[]>([]);
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -215,8 +221,28 @@ function ChatView({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    chat.send(input);
+    if (!input.trim()) return;
+    chat.send(input, {
+      grounding,
+      uploadIds: attachments.length ? attachments.map((a) => a.id) : undefined,
+    });
     setInput("");
+    setAttachments([]);
+  }
+
+  async function onFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      try {
+        const info = await api.uploadFile(file);
+        setAttachments((prev) => [...prev, info]);
+      } catch {
+        /* ignore individual failures */
+      }
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
@@ -245,6 +271,10 @@ function ChatView({
             <MessageBubble key={i} message={m} streaming={chat.streaming && i === chat.messages.length - 1} />
           ))}
 
+          {chat.status === "grounding" && (
+            <div className="my-2 text-sm text-indigo-300">🔎 Searching scholarly databases…</div>
+          )}
+
           {chat.error && (
             <div className="card mt-3 border-rose-500/40 text-sm text-rose-300">
               {chat.error}
@@ -268,33 +298,72 @@ function ChatView({
       </div>
 
       <form onSubmit={submit} className="border-t border-white/10 p-3">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <textarea
-            className="input min-h-[44px] max-h-40 resize-y"
-            rows={1}
-            placeholder={`Message ${mode.title}…`}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit(e);
-              }
-            }}
-          />
-          {chat.streaming ? (
-            <button type="button" className="btn-ghost" onClick={chat.stop}>
-              Stop
-            </button>
-          ) : (
-            <button className="btn-primary" disabled={!input.trim()}>
-              Send
-            </button>
+        <div className="mx-auto max-w-3xl">
+          {attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {attachments.map((a) => (
+                <span key={a.id} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-xs text-slate-200">
+                  📄 {a.filename}
+                  <button
+                    type="button"
+                    className="text-slate-400 hover:text-rose-300"
+                    onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
+          <div className="flex items-end gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              className="hidden"
+              multiple
+              accept=".pdf,.txt,.md,.tex,.csv,.json,.bib,text/*,application/pdf"
+              onChange={(e) => onFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              className="btn-ghost"
+              title="Attach a document (PDF or text)"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? "…" : "📎"}
+            </button>
+            <textarea
+              className="input min-h-[44px] max-h-40 resize-y"
+              rows={1}
+              placeholder={`Message ${mode.title}…`}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submit(e);
+                }
+              }}
+            />
+            {chat.streaming ? (
+              <button type="button" className="btn-ghost" onClick={chat.stop}>
+                Stop
+              </button>
+            ) : (
+              <button className="btn-primary" disabled={!input.trim()}>
+                Send
+              </button>
+            )}
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <input type="checkbox" checked={grounding} onChange={(e) => setGrounding(e.target.checked)} />
+              🔎 Ground citations (retrieve real sources)
+            </label>
+            <p className="text-[11px] text-slate-600">Verify every citation. Enter to send.</p>
+          </div>
         </div>
-        <p className="mx-auto mt-1 max-w-3xl text-[11px] text-slate-600">
-          AI is a copilot — verify every citation. Enter to send, Shift+Enter for a new line.
-        </p>
       </form>
     </div>
   );
@@ -315,6 +384,10 @@ function MessageBubble({ message, streaming }: { message: UiMessage; streaming: 
           <>
             <Markdown>{message.content || (streaming ? "▍" : "")}</Markdown>
             {streaming && message.content && <span className="ml-0.5 animate-pulse">▍</span>}
+            {message.sources && <SourcesList sources={message.sources} />}
+            {!streaming && message.content && (
+              <ExportMenu content={message.content} title={message.content.slice(0, 40)} />
+            )}
           </>
         )}
       </div>

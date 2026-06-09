@@ -9,10 +9,20 @@ export function Settings() {
   const { user, logout } = useAuth();
   const [settings, setSettings] = useState(loadSettings());
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [localAvailable, setLocalAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     api.models().then((r) => setModels(r.models)).catch(() => {});
+    api
+      .localModels()
+      .then((r) => {
+        setLocalModels(r.models);
+        setLocalAvailable(r.available);
+      })
+      .catch(() => {});
   }, []);
 
   function update(patch: Partial<typeof settings>) {
@@ -20,6 +30,11 @@ export function Settings() {
     setSettings(next);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  }
+
+  async function resend() {
+    await api.resendVerification().catch(() => {});
+    setResent(true);
   }
 
   return (
@@ -32,26 +47,86 @@ export function Settings() {
       <section className="card mt-6">
         <div className="text-sm text-slate-400">Signed in as</div>
         <div className="text-slate-100">{user?.email}</div>
+        {user && user.emailVerified === false && (
+          <div className="mt-2 text-sm text-amber-300">
+            Email not verified.{" "}
+            {resent ? (
+              <span className="text-emerald-400">Verification sent.</span>
+            ) : (
+              <button className="underline" onClick={resend}>
+                Resend verification
+              </button>
+            )}
+          </div>
+        )}
         <button className="btn-ghost mt-3" onClick={logout}>
           Log out
         </button>
       </section>
 
       <section className="card mt-4 space-y-3">
-        <h2 className="font-semibold text-slate-200">AI model</h2>
-        <select
-          className="input"
-          value={settings.model}
-          onChange={(e) => update({ model: e.target.value })}
-        >
-          <option value="">Server default (free)</option>
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-              {m.free ? "" : " (paid — needs your key)"}
-            </option>
-          ))}
-        </select>
+        <h2 className="font-semibold text-slate-200">Inference backend</h2>
+        <div className="flex gap-2">
+          <button
+            className={settings.provider === "openrouter" ? "btn-primary flex-1" : "btn-ghost flex-1"}
+            onClick={() => update({ provider: "openrouter" })}
+          >
+            Cloud (free models)
+          </button>
+          <button
+            className={settings.provider === "ollama" ? "btn-primary flex-1" : "btn-ghost flex-1"}
+            onClick={() => update({ provider: "ollama" })}
+            disabled={!localAvailable}
+            title={localAvailable ? "" : "Start Ollama locally to enable"}
+          >
+            Local (Ollama){localAvailable ? "" : " — offline"}
+          </button>
+        </div>
+
+        {settings.provider === "openrouter" ? (
+          <select className="input" value={settings.model} onChange={(e) => update({ model: e.target.value })}>
+            <option value="">Server default (free)</option>
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.free ? "" : " (paid — needs your key)"}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            className="input"
+            value={settings.localModel}
+            onChange={(e) => update({ localModel: e.target.value })}
+          >
+            <option value="">Choose a local model…</option>
+            {localModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        )}
+        <p className="text-xs text-slate-500">
+          Local inference runs fully on your machine via Ollama — private, no key, no daily limit.
+        </p>
+      </section>
+
+      <section className="card mt-4 space-y-2">
+        <label className="flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-slate-200">Citation grounding by default</div>
+            <div className="text-sm text-slate-400">
+              Retrieve real sources (Crossref / OpenAlex / Semantic Scholar) before answering.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="h-5 w-5"
+            checked={settings.grounding}
+            onChange={(e) => update({ grounding: e.target.checked })}
+          />
+        </label>
       </section>
 
       <section className="card mt-4 space-y-3">
@@ -61,8 +136,8 @@ export function Settings() {
           <a className="text-indigo-300 hover:underline" href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
             OpenRouter API key
           </a>{" "}
-          to skip the daily free limit and unlock paid models. It's stored only in this browser and
-          sent straight to OpenRouter — never saved on our server.
+          to skip the daily free limit and unlock paid models. Stored only in this browser; sent
+          straight to OpenRouter, never saved on our server.
         </p>
         <input
           className="input"
