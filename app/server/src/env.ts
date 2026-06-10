@@ -52,6 +52,24 @@ export const env = {
       clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
     },
   },
+  // Voluntary tip jar (license-safe: tips never unlock anything).
+  tips: {
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    currency: process.env.ARS_TIP_CURRENCY ?? "usd",
+    // Preset amounts in cents.
+    presets: (process.env.ARS_TIP_PRESETS ?? "300,500,1000")
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n >= 100),
+    // Hosted payment link fallback (Stripe Payment Link / LemonSqueezy / etc).
+    paymentLink: process.env.ARS_TIP_PAYMENT_LINK ?? "",
+  },
 } as const;
+
+// Refuse to boot in production with the dev JWT secret — sessions would be
+// forgeable by anyone who has read this source.
+if (process.env.NODE_ENV === "production" && env.jwtSecret === "dev-insecure-secret-change-me") {
+  throw new Error("ARS_JWT_SECRET must be set to a strong random value in production.");
+}
 
 export const hasSharedKey = env.openrouterKey.length > 0;

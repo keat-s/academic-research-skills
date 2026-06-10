@@ -69,16 +69,16 @@ export function ExportMenu({ content, title }: { content: string; title: string 
   }
 
   return (
-    <div className="relative mt-1 inline-block">
-      <button className="text-xs text-slate-400 hover:text-slate-200" onClick={() => setOpen(!open)}>
+    <div className="relative inline-block">
+      <button className="text-[11px] text-slate-500 hover:text-slate-300" onClick={() => setOpen(!open)}>
         ⤓ Export
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 w-36 rounded-lg border border-white/10 bg-[#0b1220] p-1 shadow-lg">
+        <div className="absolute bottom-full z-10 mb-1 w-36 rounded-xl border border-white/10 bg-[#0e1628] p-1 shadow-xl shadow-black/40">
           {FORMATS.map((f) => (
             <button
               key={f.id}
-              className="block w-full rounded px-2 py-1 text-left text-xs text-slate-300 hover:bg-white/10"
+              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-300 hover:bg-white/10"
               onClick={() => doExport(f.id)}
             >
               {f.label}

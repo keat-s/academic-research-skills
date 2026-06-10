@@ -19,6 +19,8 @@ export interface WebLLMTurnBody {
   webllmModel: string;
   grounding?: boolean;
   uploadIds?: string[];
+  /** Continuation turn: the trailing synthetic user instruction is not persisted. */
+  continuation?: boolean;
 }
 
 export function runWebLLMTurn(body: WebLLMTurnBody, handlers: ChatStreamHandlers): () => void {
@@ -93,7 +95,7 @@ export function runWebLLMTurn(body: WebLLMTurnBody, handlers: ChatStreamHandlers
         const { conversationId } = await api.saveExchange({
           conversationId: body.conversationId,
           modeId: body.modeId,
-          userText,
+          userText: body.continuation ? "" : userText,
           assistantText: full,
         });
         handlers.onMeta?.({ conversationId, model: body.webllmModel });

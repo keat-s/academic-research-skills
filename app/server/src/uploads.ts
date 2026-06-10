@@ -12,6 +12,7 @@ import type { Env } from "./types.js";
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const MAX_CHARS = 200_000; // cap injected context
+const MAX_UPLOADS_PER_USER = 100;
 
 export const uploadRoutes = new Hono<Env>();
 uploadRoutes.use("*", requireAuth);
@@ -34,6 +35,10 @@ uploadRoutes.post("/", async (c) => {
   const file = body["file"];
   if (!(file instanceof File)) return c.json({ error: "no_file" }, 400);
   if (file.size > MAX_BYTES) return c.json({ error: "too_large", maxBytes: MAX_BYTES }, 413);
+  const { n } = stmts.countUploadsByUser.get(userId) as { n: number };
+  if (n >= MAX_UPLOADS_PER_USER) {
+    return c.json({ error: "upload_limit", message: "Upload limit reached — delete old documents first." }, 429);
+  }
 
   const buf = new Uint8Array(await file.arrayBuffer());
   let text: string;

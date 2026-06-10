@@ -24,3 +24,8 @@ web/.cap/
 # misc
 .DS_Store
 coverage/
+
+# playwright
+test-results/
+playwright-report/
+.last-run.json

@@ -148,16 +148,46 @@ authRoutes.post("/reset", async (c) => {
   return c.json({ token: jwt, user: publicUser(user) });
 });
 
+// Brute-force lockout: 10 failed attempts per (ip, email) → 15-minute lock.
+const loginFails = new Map<string, { count: number; lockedUntil: number }>();
+const LOCK_AFTER = 10;
+const LOCK_MS = 15 * 60_000;
+
+function failKey(c: { req: { header: (h: string) => string | undefined } }, email: string) {
+  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  return `${ip}:${email}`;
+}
+
 authRoutes.post("/login", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const email = String(body.email ?? "").trim().toLowerCase();
   const password = String(body.password ?? "");
 
+  const key = failKey(c, email);
+  const lock = loginFails.get(key);
+  if (lock && lock.lockedUntil > Date.now()) {
+    return c.json({ error: "locked", message: "Too many attempts. Try again in a few minutes." }, 429);
+  }
+
   const user = stmts.userByEmail.get(email) as UserRow | undefined;
   // Constant-ish work even when the user is missing, to avoid enumeration.
   const ok = user ? verifyPassword(password, user.password_hash) : false;
-  if (!user || !ok) return c.json({ error: "invalid_credentials" }, 401);
+  if (!user || !ok) {
+    const entry = loginFails.get(key) ?? { count: 0, lockedUntil: 0 };
+    entry.count += 1;
+    if (entry.count >= LOCK_AFTER) {
+      entry.lockedUntil = Date.now() + LOCK_MS;
+      entry.count = 0;
+    }
+    loginFails.set(key, entry);
+    if (loginFails.size > 10_000) {
+      const now = Date.now();
+      for (const [k, v] of loginFails) if (v.lockedUntil < now && v.count === 0) loginFails.delete(k);
+    }
+    return c.json({ error: "invalid_credentials" }, 401);
+  }
 
+  loginFails.delete(key);
   const token = await issueToken(user.id);
   return c.json({ token, user: publicUser(user) });
 });

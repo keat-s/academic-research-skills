@@ -2,6 +2,8 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { secureHeaders } from "hono/secure-headers";
+import { bodyLimit } from "hono/body-limit";
 import { MODES } from "@ars/core";
 import { env, hasSharedKey } from "./env.js";
 import { authRoutes } from "./auth.js";
@@ -10,6 +12,7 @@ import { aiRoutes } from "./ai.js";
 import { uploadRoutes } from "./uploads.js";
 import { exportRoutes } from "./export.js";
 import { monetizeRoutes } from "./monetize.js";
+import { tipRoutes } from "./tips.js";
 import { edgeRateLimit } from "./edge_ratelimit.js";
 import { summary } from "./analytics.js";
 import "./db.js";
@@ -17,6 +20,10 @@ import "./db.js";
 const app = new Hono();
 
 app.use("*", logger());
+app.use("*", secureHeaders());
+// Global request-size ceiling; the upload route additionally enforces its own
+// 8 MB per-file limit after parsing.
+app.use("/api/*", bodyLimit({ maxSize: 10 * 1024 * 1024 }));
 app.use(
   "*",
   cors({
@@ -63,6 +70,7 @@ app.route("/api/ai", aiRoutes);
 app.route("/api/uploads", uploadRoutes);
 app.route("/api/export", exportRoutes);
 app.route("/api/monetization", monetizeRoutes);
+app.route("/api/tips", tipRoutes);
 
 const port = env.port;
 serve({ fetch: app.fetch, port }, (info) => {

@@ -144,6 +144,26 @@ export const api = {
     jsonFetch<{ conversation: Conversation; messages: StoredMessage[] }>(`/ai/conversations/${id}`),
   deleteConversation: (id: string) =>
     jsonFetch<{ ok: boolean }>(`/ai/conversations/${id}`, { method: "DELETE" }),
+  // Delete the k-th user turn (1-based) and everything after it.
+  truncateConversation: (id: string, fromUserTurn: number) =>
+    jsonFetch<{ ok: boolean }>(`/ai/conversations/${id}/truncate`, {
+      method: "POST",
+      body: JSON.stringify({ fromUserTurn }),
+    }),
+
+  tipsConfig: () =>
+    jsonFetch<{
+      enabled: boolean;
+      stripe: boolean;
+      presets: number[];
+      currency: string;
+      paymentLink: string | null;
+    }>("/tips/config"),
+  tipCheckout: (amountCents: number) =>
+    jsonFetch<{ url: string }>("/tips/checkout", {
+      method: "POST",
+      body: JSON.stringify({ amountCents }),
+    }),
 };
 
 export interface Conversation {
@@ -187,6 +207,7 @@ export interface ChatStreamBody {
   grounding?: boolean;
   uploadIds?: string[];
   provider?: "openrouter" | "ollama";
+  skipUserPersist?: boolean;
 }
 
 /**

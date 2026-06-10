@@ -48,6 +48,15 @@ Legend: ✅ built & verified · 🔌 built, needs your config/secrets to activat
 | 6 | Export to DOCX/LaTeX/PDF | ✅ | MD/HTML/LaTeX/RTF always available (pure converters); DOCX/PDF via pandoc when present (🔌 install pandoc), clean fallback otherwise. |
 | 7 | Analytics + edge rate limiting | ✅ | Privacy-preserving counts (no content) + token-gated `/api/metrics`; per-IP limiter on auth+AI routes. |
 
+### Ship-readiness pass (post-roadmap)
+| Feature | Status | Notes |
+|---|---|---|
+| Tip-jar checkout | 🔌 | Stripe Checkout (set `STRIPE_SECRET_KEY`) or any hosted payment link (`ARS_TIP_PAYMENT_LINK`). Tips never unlock anything. |
+| Chat actions | ✅ | Copy, edit-and-resend, regenerate, stop-and-continue — with server-side history truncation so reloads stay consistent. |
+| Visual design pass | ✅ | Gradient design system, Inter font, per-skill accents, animations, polished landing page. |
+| E2E tests (Playwright) | ✅ | 12 tests drive the real app (auth, launcher, chat error paths, settings, support); `pnpm e2e` + CI workflow. |
+| Abuse hardening | ✅ | Secure headers, 10 MB body limit, login brute-force lockout, per-user upload caps, prod refuses the dev JWT secret. |
+
 ### Honest limitations
 - This does **not** reproduce the suite's multi-agent orchestration, integrity
   gates, or cross-model verification — those remain in the Claude Code skills.

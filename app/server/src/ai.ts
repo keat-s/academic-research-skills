@@ -103,6 +103,23 @@ aiRoutes.get("/conversations/:id", (c) => {
   return c.json({ conversation: conv, messages: stmts.messagesByConversation.all(id) });
 });
 
+// Truncate a conversation at its k-th user message (1-based): that message and
+// everything after it are deleted. Powers edit-and-resend and regenerate.
+aiRoutes.post("/conversations/:id/truncate", async (c) => {
+  const userId = c.get("userId") as string;
+  const id = c.req.param("id");
+  if (!stmts.conversationById.get(id, userId)) return c.json({ error: "not_found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const k = Math.floor(Number(body.fromUserTurn));
+  if (!Number.isFinite(k) || k < 1) return c.json({ error: "bad_request" }, 400);
+  const anchor = stmts.kthUserMessageAt.get(id, k - 1) as { created_at: number } | undefined;
+  if (anchor) {
+    stmts.deleteMessagesFrom.run(id, anchor.created_at);
+    stmts.touchConversation.run(Date.now(), id);
+  }
+  return c.json({ ok: true });
+});
+
 aiRoutes.delete("/conversations/:id", (c) => {
   const userId = c.get("userId") as string;
   stmts.deleteConversation.run(c.req.param("id"), userId);
@@ -119,6 +136,9 @@ interface ChatBody {
   grounding?: boolean; // run the scholarly-search citation pre-pass
   uploadIds?: string[]; // attach extracted text from prior uploads
   provider?: "openrouter" | "ollama"; // "ollama" routes to a local model
+  // True for continuation turns ("continue where you left off") — the synthetic
+  // user instruction should not be persisted into history.
+  skipUserPersist?: boolean;
 }
 
 /**
@@ -185,7 +205,7 @@ aiRoutes.post("/chat", async (c) => {
       return c.json({ error: "not_found" }, 404);
     }
   }
-  if (lastUser) {
+  if (lastUser && !body.skipUserPersist) {
     stmts.insertMessage.run(randomUUID(), conversationId, "user", lastUser.content, Date.now());
   }
 

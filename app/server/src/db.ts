@@ -130,6 +130,13 @@ export const stmts = {
   messagesByConversation: db.prepare(
     "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at"
   ),
+  // k-th user message (1-based) of a conversation — anchor for truncation.
+  kthUserMessageAt: db.prepare(
+    "SELECT created_at FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY created_at LIMIT 1 OFFSET ?"
+  ),
+  deleteMessagesFrom: db.prepare(
+    "DELETE FROM messages WHERE conversation_id = ? AND created_at >= ?"
+  ),
 
   getUsage: db.prepare("SELECT count FROM usage_daily WHERE user_id = ? AND day = ?"),
   upsertUsage: db.prepare(`
@@ -167,6 +174,7 @@ export const stmts = {
   uploadsByUser: db.prepare(
     "SELECT id, filename, mime, chars, created_at FROM uploads WHERE user_id = ? ORDER BY created_at DESC LIMIT 50"
   ),
+  countUploadsByUser: db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE user_id = ?"),
   uploadById: db.prepare("SELECT * FROM uploads WHERE id = ? AND user_id = ?"),
   deleteUpload: db.prepare("DELETE FROM uploads WHERE id = ? AND user_id = ?"),
 };
