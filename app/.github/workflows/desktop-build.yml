@@ -1,0 +1,61 @@
+name: desktop-build
+
+# Builds the Tauri desktop app for macOS, Windows, and Linux. Runs on demand or
+# when a v* tag is pushed. Artifacts are uploaded per-OS. Code signing /
+# notarization are intentionally left to the deployer (requires secrets); see
+# docs/PACKAGING.md.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps (Tauri)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: web/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./packages/core build
+
+      - name: Build Tauri app
+        working-directory: web
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ars-studio-${{ matrix.target }}
+          path: |
+            web/src-tauri/target/${{ matrix.target }}/release/bundle/**/*
+          if-no-files-found: warn
