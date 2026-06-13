@@ -6,8 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import { MODES } from "@ars/core";
 import { env, hasSharedKey } from "./env.js";
-import { authRoutes } from "./auth.js";
-import { oauthRoutes } from "./oauth.js";
+import { auth } from "./auth.js";
 import { aiRoutes } from "./ai.js";
 import { uploadRoutes } from "./uploads.js";
 import { exportRoutes } from "./export.js";
@@ -48,6 +47,7 @@ app.get("/api/health", (c) =>
       export: true,
       localModel: true,
       emailVerification: env.requireEmailVerification,
+      supporter: !!env.stripe.supporterPriceId,
     },
   })
 );
@@ -64,8 +64,13 @@ app.get("/api/metrics", (c) => {
   return c.json({ last24h: summary(24 * 60 * 60_000), last7d: summary(7 * 24 * 60 * 60_000) });
 });
 
-app.route("/api/auth", authRoutes);
-app.route("/api/auth/oauth", oauthRoutes);
+// better-auth owns the whole /api/auth/* surface (sign-up/in/out, email
+// verification, password reset, social callbacks, and — when configured — the
+// stripe subscription + webhook endpoints). The bearer plugin returns the
+// session token in the `set-auth-token` response header; the web client stores
+// it in localStorage and sends it back as `Authorization: Bearer <token>`.
+app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
 app.route("/api/ai", aiRoutes);
 app.route("/api/uploads", uploadRoutes);
 app.route("/api/export", exportRoutes);

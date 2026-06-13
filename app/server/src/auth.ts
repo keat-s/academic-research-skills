@@ -1,202 +1,122 @@
-import { Hono } from "hono";
-import { SignJWT, jwtVerify } from "jose";
-import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
+import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
+import { stripe as stripePlugin } from "@better-auth/stripe";
+import Stripe from "stripe";
+import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Context, Next } from "hono";
-import type { Env } from "./types.js";
+import { db } from "./db.js";
 import { env } from "./env.js";
-import { stmts, type UserRow, type TokenRow } from "./db.js";
 import { sendMail, verificationEmail, resetEmail } from "./mail.js";
-import { track } from "./analytics.js";
+import type { Env } from "./types.js";
 
-const secret = new TextEncoder().encode(env.jwtSecret);
-const TOKEN_TTL = "30d";
-
-// --- password hashing (scrypt; no native bcrypt dependency) ---
-function hashPassword(password: string): string {
+// --- legacy-compatible password hashing --------------------------------------
+// Existing users were stored as Node `scryptSync(pw, salt, 64)` in the format
+// "<saltHex>:<hashHex>". We override better-auth's password hash/verify with the
+// exact same format so migrated users keep logging in (better-auth's default
+// scrypt params differ — without this every existing user is locked out).
+function legacyHash(pw: string): string {
   const salt = randomBytes(16).toString("hex");
-  const derived = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${derived}`;
+  return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
 }
-
-function verifyPassword(password: string, stored: string): boolean {
+function legacyVerify(stored: string, pw: string): boolean {
   const [salt, key] = stored.split(":");
   if (!salt || !key) return false;
-  const derived = scryptSync(password, salt, 64);
+  const derived = scryptSync(pw, salt, 64);
   const keyBuf = Buffer.from(key, "hex");
   return keyBuf.length === derived.length && timingSafeEqual(keyBuf, derived);
 }
 
-export async function issueToken(userId: string): Promise<string> {
-  return new SignJWT({ sub: userId })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(TOKEN_TTL)
-    .sign(secret);
-}
+// Stripe client is only built when a secret key is present; the supporter plugin
+// is additionally gated on the price id below so boot never fails without Stripe.
+const stripeClient = env.tips.stripeSecretKey
+  ? new Stripe(env.tips.stripeSecretKey)
+  : undefined;
 
-function createTokenRecord(userId: string, kind: "verify" | "reset", ttlMs: number): string {
-  const token = randomBytes(32).toString("base64url");
-  stmts.insertToken.run(token, userId, kind, Date.now() + ttlMs);
-  return token;
-}
+const stripeEnabled = !!stripeClient && !!env.stripe.supporterPriceId;
 
-async function sendVerification(userId: string, email: string): Promise<void> {
-  const token = createTokenRecord(userId, "verify", 7 * 24 * 60 * 60_000);
-  const link = `${env.webUrl}/verify?token=${token}`;
-  await sendMail({ to: email, ...verificationEmail(link) });
-}
-
-export interface AuthedVars {
-  userId: string;
-}
-
-/** Middleware: require a valid Bearer token; sets c.var.userId. */
-export async function requireAuth(c: Context<Env>, next: Next) {
-  const header = c.req.header("Authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!token) return c.json({ error: "unauthorized" }, 401);
-  try {
-    const { payload } = await jwtVerify(token, secret);
-    if (typeof payload.sub !== "string") return c.json({ error: "unauthorized" }, 401);
-    c.set("userId", payload.sub);
-    await next();
-  } catch {
-    return c.json({ error: "unauthorized" }, 401);
-  }
-}
-
-export function publicUser(u: UserRow) {
-  return {
-    id: u.id,
-    email: u.email,
-    displayName: u.display_name,
-    emailVerified: !!u.email_verified,
+// better-auth blocks cross-origin auth requests whose Origin isn't trusted
+// (CSRF protection). The web app is served from a different origin than this
+// API (separate dev ports; potentially separate prod hosts), so we must
+// explicitly trust the configured web origins. We never fall back to "trust
+// all" — even when CORS is "*" — since that would defeat the CSRF guard. Any
+// non-"*" CORS origins are folded in as well.
+function trustedOrigins(): string[] {
+  const set = new Set<string>();
+  const add = (u: string) => {
+    if (!u) return;
+    try {
+      set.add(new URL(u).origin);
+    } catch {
+      set.add(u); // already a bare origin or a wildcard pattern
+    }
   };
+  add(env.webUrl);
+  add(env.publicUrl);
+  add(env.serverUrl);
+  for (const o of env.corsOrigins) if (o && o !== "*") add(o);
+  return [...set];
 }
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-export const authRoutes = new Hono<Env>();
-
-authRoutes.post("/signup", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const password = String(body.password ?? "");
-  const displayName = body.displayName ? String(body.displayName).slice(0, 80) : null;
-
-  if (!EMAIL_RE.test(email)) return c.json({ error: "invalid_email" }, 400);
-  if (password.length < 8) return c.json({ error: "password_too_short" }, 400);
-  if (stmts.userByEmail.get(email)) return c.json({ error: "email_taken" }, 409);
-
-  const id = randomUUID();
-  stmts.insertUser.run(id, email, hashPassword(password), displayName, Date.now());
-  await sendVerification(id, email).catch(() => {});
-  track("signup", { userId: id });
-  const token = await issueToken(id);
-  return c.json({ token, user: { id, email, displayName, emailVerified: false } }, 201);
+export const auth = betterAuth({
+  database: db, // share the existing better-sqlite3 instance
+  baseURL: env.serverUrl,
+  basePath: "/api/auth",
+  secret: env.jwtSecret, // reuse ARS_JWT_SECRET
+  trustedOrigins: trustedOrigins(),
+  emailAndPassword: {
+    enabled: true,
+    minPasswordLength: 8,
+    requireEmailVerification: env.requireEmailVerification,
+    password: {
+      hash: async (pw) => legacyHash(pw),
+      verify: async ({ hash, password }) => legacyVerify(hash, password),
+    },
+    sendResetPassword: async ({ user, url }) => {
+      await sendMail({ to: user.email, ...resetEmail(url) }).catch(() => {});
+    },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendMail({ to: user.email, ...verificationEmail(url) }).catch(() => {});
+    },
+  },
+  socialProviders: {
+    ...(env.oauth.google.clientId && env.oauth.google.clientSecret
+      ? { google: env.oauth.google }
+      : {}),
+    ...(env.oauth.github.clientId && env.oauth.github.clientSecret
+      ? { github: env.oauth.github }
+      : {}),
+  },
+  plugins: [
+    bearer(),
+    ...(stripeEnabled
+      ? [
+          stripePlugin({
+            stripeClient: stripeClient!,
+            stripeWebhookSecret: env.stripe.webhookSecret,
+            createCustomerOnSignup: true,
+            subscription: {
+              enabled: true,
+              plans: [{ name: "supporter", priceId: env.stripe.supporterPriceId }],
+            },
+          }),
+        ]
+      : []),
+  ],
 });
 
-// --- email verification ---
-authRoutes.post("/verify", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const token = String(body.token ?? "");
-  const row = stmts.getToken.get(token, "verify") as TokenRow | undefined;
-  if (!row || row.expires_at < Date.now()) return c.json({ error: "invalid_or_expired" }, 400);
-  stmts.setEmailVerified.run(row.user_id);
-  stmts.deleteToken.run(token);
-  track("email_verified", { userId: row.user_id });
-  return c.json({ ok: true });
-});
-
-authRoutes.post("/resend-verification", requireAuth, async (c) => {
-  const userId = c.get("userId") as string;
-  const user = stmts.userById.get(userId) as UserRow | undefined;
-  if (!user) return c.json({ error: "not_found" }, 404);
-  if (user.email_verified) return c.json({ ok: true, already: true });
-  stmts.deleteUserTokens.run(userId, "verify");
-  await sendVerification(userId, user.email).catch(() => {});
-  return c.json({ ok: true });
-});
-
-// --- password reset ---
-authRoutes.post("/request-reset", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const user = stmts.userByEmail.get(email) as UserRow | undefined;
-  // Always 200 to avoid account enumeration.
-  if (user) {
-    stmts.deleteUserTokens.run(user.id, "reset");
-    const token = createTokenRecord(user.id, "reset", 60 * 60_000);
-    const link = `${env.webUrl}/reset?token=${token}`;
-    await sendMail({ to: user.email, ...resetEmail(link) }).catch(() => {});
-  }
-  return c.json({ ok: true });
-});
-
-authRoutes.post("/reset", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const token = String(body.token ?? "");
-  const password = String(body.password ?? "");
-  if (password.length < 8) return c.json({ error: "password_too_short" }, 400);
-  const row = stmts.getToken.get(token, "reset") as TokenRow | undefined;
-  if (!row || row.expires_at < Date.now()) return c.json({ error: "invalid_or_expired" }, 400);
-  stmts.setPassword.run(hashPassword(password), row.user_id);
-  stmts.deleteToken.run(token);
-  track("password_reset", { userId: row.user_id });
-  const jwt = await issueToken(row.user_id);
-  const user = stmts.userById.get(row.user_id) as UserRow;
-  return c.json({ token: jwt, user: publicUser(user) });
-});
-
-// Brute-force lockout: 10 failed attempts per (ip, email) → 15-minute lock.
-const loginFails = new Map<string, { count: number; lockedUntil: number }>();
-const LOCK_AFTER = 10;
-const LOCK_MS = 15 * 60_000;
-
-function failKey(c: { req: { header: (h: string) => string | undefined } }, email: string) {
-  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  return `${ip}:${email}`;
+/**
+ * Interface-compatible replacement for the old custom-JWT `requireAuth`. Every
+ * protected route (ai.ts / uploads.ts / export.ts / tips.ts) stays UNTOUCHED:
+ * it still reads `c.var.userId`. The session is resolved by better-auth from the
+ * `Authorization: Bearer <token>` header (bearer plugin).
+ */
+export async function requireAuth(c: Context<Env>, next: Next) {
+  const session = await auth.api
+    .getSession({ headers: c.req.raw.headers })
+    .catch(() => null);
+  if (!session) return c.json({ error: "unauthorized" }, 401);
+  c.set("userId", session.user.id);
+  await next();
 }
-
-authRoutes.post("/login", async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const password = String(body.password ?? "");
-
-  const key = failKey(c, email);
-  const lock = loginFails.get(key);
-  if (lock && lock.lockedUntil > Date.now()) {
-    return c.json({ error: "locked", message: "Too many attempts. Try again in a few minutes." }, 429);
-  }
-
-  const user = stmts.userByEmail.get(email) as UserRow | undefined;
-  // Constant-ish work even when the user is missing, to avoid enumeration.
-  const ok = user ? verifyPassword(password, user.password_hash) : false;
-  if (!user || !ok) {
-    const entry = loginFails.get(key) ?? { count: 0, lockedUntil: 0 };
-    entry.count += 1;
-    if (entry.count >= LOCK_AFTER) {
-      entry.lockedUntil = Date.now() + LOCK_MS;
-      entry.count = 0;
-    }
-    loginFails.set(key, entry);
-    if (loginFails.size > 10_000) {
-      const now = Date.now();
-      for (const [k, v] of loginFails) if (v.lockedUntil < now && v.count === 0) loginFails.delete(k);
-    }
-    return c.json({ error: "invalid_credentials" }, 401);
-  }
-
-  loginFails.delete(key);
-  const token = await issueToken(user.id);
-  return c.json({ token, user: publicUser(user) });
-});
-
-authRoutes.get("/me", requireAuth, (c) => {
-  const userId = c.get("userId") as string;
-  const user = stmts.userById.get(userId) as UserRow | undefined;
-  if (!user) return c.json({ error: "not_found" }, 404);
-  return c.json({ user: publicUser(user) });
-});
-
-export { hashPassword, verifyPassword };

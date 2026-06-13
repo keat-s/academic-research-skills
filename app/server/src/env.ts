@@ -23,6 +23,9 @@ export const env = {
   corsOrigins: (process.env.ARS_CORS_ORIGINS ?? "*").split(",").map((s) => s.trim()),
   // Free-tier daily message budget per user when using the shared key.
   freeDailyMessages: Number(process.env.ARS_FREE_DAILY_MESSAGES ?? 40),
+  // Raised daily budget for active "supporter" subscribers. Never gates a core
+  // feature — it only lifts the free ceiling (BYOK still bypasses quota entirely).
+  supporterDailyMessages: Number(process.env.ARS_SUPPORTER_DAILY_MESSAGES ?? 200),
   // Web app base used to build links in emails / OAuth redirects.
   webUrl: process.env.ARS_WEB_URL ?? process.env.ARS_PUBLIC_URL ?? "http://localhost:5173",
   // Public base of THIS server (for OAuth redirect URIs).
@@ -63,6 +66,13 @@ export const env = {
       .filter((n) => Number.isFinite(n) && n >= 100),
     // Hosted payment link fallback (Stripe Payment Link / LemonSqueezy / etc).
     paymentLink: process.env.ARS_TIP_PAYMENT_LINK ?? "",
+  },
+  // Optional "supporter" subscription via @better-auth/stripe. The plugin is
+  // only registered when STRIPE_SECRET_KEY + ARS_SUPPORTER_PRICE_ID are set, so
+  // boot never fails without Stripe. Supporter never gates a core feature.
+  stripe: {
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+    supporterPriceId: process.env.ARS_SUPPORTER_PRICE_ID ?? "",
   },
 } as const;
 

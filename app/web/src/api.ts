@@ -66,29 +66,9 @@ export const api = {
   modes: () => jsonFetch<{ modes: Mode[] }>("/modes").then((r) => r.modes),
   monetization: () => jsonFetch<MonetizationConfig>("/monetization"),
 
-  signup: (email: string, password: string, displayName?: string) =>
-    jsonFetch<{ token: string; user: PublicUser }>("/auth/signup", {
-      method: "POST",
-      body: JSON.stringify({ email, password, displayName }),
-    }),
-  login: (email: string, password: string) =>
-    jsonFetch<{ token: string; user: PublicUser }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  me: () => jsonFetch<{ user: PublicUser }>("/auth/me").then((r) => r.user),
-
-  verifyEmail: (token: string) =>
-    jsonFetch<{ ok: boolean }>("/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
-  resendVerification: () => jsonFetch<{ ok: boolean }>("/auth/resend-verification", { method: "POST" }),
-  requestReset: (email: string) =>
-    jsonFetch<{ ok: boolean }>("/auth/request-reset", { method: "POST", body: JSON.stringify({ email }) }),
-  resetPassword: (token: string, password: string) =>
-    jsonFetch<{ token: string; user: PublicUser }>("/auth/reset", {
-      method: "POST",
-      body: JSON.stringify({ token, password }),
-    }),
-  oauthProviders: () => jsonFetch<{ providers: string[] }>("/auth/oauth/providers").then((r) => r.providers),
+  // Auth (sign-up / sign-in / verification / reset / social) is owned by
+  // better-auth via `authClient` (web/src/lib/auth-client.ts). The methods that
+  // used to live here were removed in the big-bang migration.
 
   models: () => jsonFetch<{ models: ModelInfo[]; sharedKey: boolean }>("/ai/models"),
   localModels: () =>

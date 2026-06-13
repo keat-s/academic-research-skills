@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api, setToken } from "../api";
+import { authClient } from "../lib/auth-client";
 import { useAuth } from "../auth";
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -12,7 +12,11 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-/** /verify?token=... — confirm email then bounce to the app. */
+/**
+ * /verify?token=... — confirm email then bounce to the app.
+ * better-auth's verification email normally links straight at the server
+ * endpoint, but we keep this page as a token-handling fallback.
+ */
 export function VerifyPage() {
   const [params] = useSearchParams();
   const { refresh } = useAuth();
@@ -21,9 +25,10 @@ export function VerifyPage() {
   useEffect(() => {
     const token = params.get("token");
     if (!token) return setState("fail");
-    api
-      .verifyEmail(token)
-      .then(async () => {
+    authClient
+      .verifyEmail({ query: { token } })
+      .then(async ({ error }) => {
+        if (error) return setState("fail");
         await refresh();
         setState("ok");
       })
@@ -52,7 +57,6 @@ export function VerifyPage() {
 /** /reset?token=... — set a new password. */
 export function ResetPage() {
   const [params] = useSearchParams();
-  const { setSession } = useAuth();
   const nav = useNavigate();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -64,9 +68,9 @@ export function ResetPage() {
     setError("");
     setBusy(true);
     try {
-      const { token: jwt, user } = await api.resetPassword(token, password);
-      setSession(jwt, user);
-      nav("/app", { replace: true });
+      const { error: err } = await authClient.resetPassword({ newPassword: password, token });
+      if (err) throw err;
+      nav("/login", { replace: true });
     } catch {
       setError("This reset link is invalid or expired, or the password is too short.");
     } finally {
@@ -103,16 +107,17 @@ export function ResetPage() {
   );
 }
 
-/** /oauth?token=... — store the JWT handed back by the OAuth callback. */
+/**
+ * /oauth — legacy social-callback landing route. better-auth now handles the
+ * social round-trip itself (its callback redirects to the `callbackURL` we pass
+ * to `signIn.social`, i.e. /app). This page just refreshes the session and
+ * bounces, so any stale links still work.
+ */
 export function OAuthCallbackPage() {
-  const [params] = useSearchParams();
   const { refresh } = useAuth();
   const nav = useNavigate();
 
   useEffect(() => {
-    const token = params.get("token");
-    if (!token) return void nav("/login?oauth_error=missing_token", { replace: true });
-    setToken(token);
     refresh().finally(() => nav("/app", { replace: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

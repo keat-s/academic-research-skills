@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { authClient } from "../lib/auth-client";
 import { useAuth } from "../auth";
 import { loadSettings, saveSettings } from "../settings";
 import { WEBLLM_MODELS, isWebGpuAvailable } from "../webllm";
 import type { ModelInfo } from "@ars/core";
+
+interface Sub {
+  plan: string;
+  status: string;
+  cancelAtPeriodEnd?: boolean;
+}
 
 export function Settings() {
   const { user, logout } = useAuth();
@@ -14,6 +21,9 @@ export function Settings() {
   const [localAvailable, setLocalAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const [resent, setResent] = useState(false);
+  const [supporterEnabled, setSupporterEnabled] = useState(false);
+  const [subscription, setSubscription] = useState<Sub | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
   const webgpu = isWebGpuAvailable();
 
   useEffect(() => {
@@ -25,7 +35,52 @@ export function Settings() {
         setLocalAvailable(r.available);
       })
       .catch(() => {});
+    // Supporter tier is config-gated server-side (Stripe). Only show the card
+    // when the server advertises it, and reflect any existing subscription.
+    api
+      .health()
+      .then((h) => {
+        const enabled = !!(h as { features?: { supporter?: boolean } }).features?.supporter;
+        setSupporterEnabled(enabled);
+        if (enabled) refreshSubscription();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function refreshSubscription() {
+    try {
+      const { data } = await authClient.subscription.list();
+      const active = (data ?? []).find(
+        (s: Sub) => s.status === "active" || s.status === "trialing"
+      );
+      setSubscription(active ?? null);
+    } catch {
+      setSubscription(null);
+    }
+  }
+
+  async function becomeSupporter() {
+    setBillingBusy(true);
+    try {
+      await authClient.subscription.upgrade({
+        plan: "supporter",
+        successUrl: `${window.location.origin}/settings?supporter=success`,
+        cancelUrl: `${window.location.origin}/settings`,
+      });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
+  async function cancelSupporter() {
+    setBillingBusy(true);
+    try {
+      await authClient.subscription.cancel({ returnUrl: `${window.location.origin}/settings` });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
 
   function update(patch: Partial<typeof settings>) {
     const next = saveSettings(patch);
@@ -35,7 +90,11 @@ export function Settings() {
   }
 
   async function resend() {
-    await api.resendVerification().catch(() => {});
+    if (user?.email) {
+      await authClient
+        .sendVerificationEmail({ email: user.email, callbackURL: `${window.location.origin}/app` })
+        .catch(() => {});
+    }
     setResent(true);
   }
 
@@ -65,6 +124,34 @@ export function Settings() {
           Log out
         </button>
       </section>
+
+      {supporterEnabled && (
+        <section className="card mt-4 space-y-3">
+          <h2 className="font-semibold text-slate-200">Supporter</h2>
+          <p className="text-sm text-slate-400">
+            ARS Studio is free and open under CC BY-NC — and stays that way. Becoming a Supporter is
+            entirely optional: it never unlocks a core feature. It only raises your daily free
+            message limit and adds a small thank-you badge. You can stop any time.
+          </p>
+          {subscription ? (
+            <div className="space-y-2">
+              <p className="text-sm text-emerald-400">
+                You're a Supporter — thank you!{" "}
+                {subscription.cancelAtPeriodEnd && (
+                  <span className="text-amber-300">(ends at the period's close)</span>
+                )}
+              </p>
+              <button className="btn-ghost" onClick={cancelSupporter} disabled={billingBusy}>
+                {billingBusy ? "…" : "Manage / cancel"}
+              </button>
+            </div>
+          ) : (
+            <button className="btn-primary" onClick={becomeSupporter} disabled={billingBusy}>
+              {billingBusy ? "…" : "Become a Supporter"}
+            </button>
+          )}
+        </section>
+      )}
 
       <section className="card mt-4 space-y-3">
         <h2 className="font-semibold text-slate-200">Inference backend</h2>

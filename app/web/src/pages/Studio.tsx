@@ -8,33 +8,80 @@ import { loadSettings } from "../settings";
 import { Markdown } from "../components/Markdown";
 import { AdSlot } from "../components/AdSlot";
 import { SourcesList, ExportMenu } from "../components/MessageExtras";
+import { Badge } from "@/components/ui/badge";
+import { SuggestedActions } from "../components/chat/SuggestedActions";
+import { ModelPicker } from "../components/chat/ModelPicker";
+import { MessageReasoning } from "../components/chat/MessageReasoning";
+import { MessageActions } from "../components/chat/MessageActions";
 
-const SKILL_META: Record<string, { label: string; icon: string; accent: string; ring: string }> = {
+/**
+ * Split a leading <think>…</think> block (emitted by reasoning models such as
+ * DeepSeek-R1 on the free tier) from the visible answer. Handles the still-open
+ * case mid-stream so the reasoning panel fills live.
+ */
+function splitReasoning(content: string): { reasoning: string | null; body: string } {
+  const closed = content.match(/^\s*<think>([\s\S]*?)<\/think>\s*/i);
+  if (closed) return { reasoning: (closed[1] ?? "").trim(), body: content.slice(closed[0].length) };
+  const open = content.match(/^\s*<think>([\s\S]*)$/i);
+  if (open) return { reasoning: (open[1] ?? "").trim(), body: "" };
+  return { reasoning: null, body: content };
+}
+
+interface SkillMeta {
+  label: string;
+  icon: string;
+  /** One-line "what this skill does" — drives the capability cards. */
+  desc: string;
+  accent: string;
+  ring: string;
+  /** Dot color for the capability card + flow strip. */
+  dot: string;
+  /** Display order (also the recommended pipeline order). */
+  order: number;
+}
+
+const SKILL_META: Record<string, SkillMeta> = {
   "deep-research": {
     label: "Deep Research",
     icon: "📚",
+    desc: "Investigate a question end-to-end — multi-agent search, fact-checking, and literature reviews.",
     accent: "text-sky-300 border-sky-400/30 bg-sky-400/10",
     ring: "hover:border-sky-400/40",
+    dot: "bg-sky-400",
+    order: 0,
   },
   "academic-paper": {
     label: "Academic Paper",
     icon: "✍️",
+    desc: "Turn research into a publication — outline, draft, revise, and bilingual abstracts.",
     accent: "text-violet-300 border-violet-400/30 bg-violet-400/10",
     ring: "hover:border-violet-400/40",
+    dot: "bg-violet-400",
+    order: 1,
   },
   "academic-paper-reviewer": {
     label: "Paper Reviewer",
     icon: "🔍",
+    desc: "Multi-perspective peer review — five reviewers plus a decision letter and revision roadmap.",
     accent: "text-amber-300 border-amber-400/30 bg-amber-400/10",
     ring: "hover:border-amber-400/40",
+    dot: "bg-amber-400",
+    order: 2,
   },
   "academic-pipeline": {
     label: "Full Pipeline",
     icon: "🧭",
+    desc: "The whole journey orchestrated — research → write → integrity → review → finalize.",
     accent: "text-emerald-300 border-emerald-400/30 bg-emerald-400/10",
     ring: "hover:border-emerald-400/40",
+    dot: "bg-emerald-400",
+    order: 3,
   },
 };
+
+const SKILL_ORDER = Object.entries(SKILL_META)
+  .sort((a, b) => a[1].order - b[1].order)
+  .map(([id]) => id);
 
 /** Merge consecutive assistant rows (continuations) into single bubbles. */
 function mergeAssistantRuns(rows: { role: "user" | "assistant"; content: string }[]): UiMessage[] {
@@ -241,33 +288,136 @@ function ModeLauncher({
   userName: string | null;
 }) {
   const [q, setQ] = useState("");
+  const [activeSkill, setActiveSkill] = useState<string | null>(null);
+
+  // Mode counts per skill (for the capability cards), computed from live data.
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const m of modes) c[m.skill] = (c[m.skill] ?? 0) + 1;
+    return c;
+  }, [modes]);
+
+  const searching = q.trim().length > 0;
+
+  const filtered = useMemo(() => {
+    const ql = q.toLowerCase();
+    return modes.filter((m) => {
+      if (activeSkill && m.skill !== activeSkill) return false;
+      if (!searching) return true;
+      return (
+        m.title.toLowerCase().includes(ql) ||
+        m.blurb.toLowerCase().includes(ql) ||
+        m.triggers.some((t) => t.toLowerCase().includes(ql))
+      );
+    });
+  }, [modes, q, activeSkill, searching]);
+
+  // Group filtered modes by skill in the canonical pipeline order.
   const grouped = useMemo(() => {
-    const filtered = modes.filter(
-      (m) =>
-        !q ||
-        m.title.toLowerCase().includes(q.toLowerCase()) ||
-        m.blurb.toLowerCase().includes(q.toLowerCase()) ||
-        m.triggers.some((t) => t.toLowerCase().includes(q.toLowerCase()))
-    );
     const groups: Record<string, Mode[]> = {};
     for (const m of filtered) (groups[m.skill] ??= []).push(m);
-    return groups;
-  }, [modes, q]);
+    return SKILL_ORDER.filter((s) => groups[s]?.length).map((s) => [s, groups[s]!] as const);
+  }, [filtered]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto p-6 animate-fade-up">
+    <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto p-6 animate-fade-up">
       <h1 className="text-2xl font-bold text-white">
         {userName ? `Hi ${userName} — what are you working on?` : "What are you working on?"}
       </h1>
-      <p className="mt-1 text-slate-400">Pick a workflow. 25 modes across four research skills.</p>
-      <input
-        className="input mt-5"
-        placeholder="Search modes… (e.g. lit review, peer review, abstract)"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
-      <div className="mt-7 space-y-8 pb-8">
-        {Object.entries(grouped).map(([skill, list]) => {
+      <p className="mt-1 text-slate-400">
+        {modes.length} workflows across four research skills — from a single question to a finished,
+        peer-reviewed paper.
+      </p>
+
+      {/* Recommended pipeline flow — communicates the end-to-end journey at a glance. */}
+      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <span className="font-semibold uppercase tracking-widest text-slate-600">Typical flow</span>
+        {SKILL_ORDER.slice(0, 3).map((s, i) => (
+          <span key={s} className="flex items-center gap-2">
+            {i > 0 && <span className="text-slate-700">→</span>}
+            <button
+              onClick={() => {
+                setActiveSkill(s);
+                setQ("");
+              }}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-slate-300 transition-colors hover:border-white/25 hover:bg-white/5"
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${SKILL_META[s]?.dot}`} />
+              {SKILL_META[s]?.label}
+            </button>
+          </span>
+        ))}
+        <span className="text-slate-700">→</span>
+        <button
+          onClick={() => {
+            setActiveSkill("academic-pipeline");
+            setQ("");
+          }}
+          className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-emerald-300 transition-colors hover:border-emerald-400/40"
+        >
+          🧭 or run the whole pipeline
+        </button>
+      </div>
+
+      {/* Capability cards — what each skill does; double as filters. */}
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {SKILL_ORDER.map((skill) => {
+          const meta = SKILL_META[skill];
+          if (!meta) return null;
+          const active = activeSkill === skill;
+          return (
+            <button
+              key={skill}
+              onClick={() => {
+                setActiveSkill(active ? null : skill);
+                setQ("");
+              }}
+              className={`rounded-2xl border p-3.5 text-left transition-all duration-150 hover:-translate-y-0.5 ${
+                active
+                  ? `${meta.accent} ring-1 ring-inset`
+                  : `border-white/10 bg-white/[0.03] ${meta.ring}`
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{meta.icon}</span>
+                <span className="font-semibold text-slate-100">{meta.label}</span>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{meta.desc}</p>
+              <div className="mt-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                {counts[skill] ?? 0} {counts[skill] === 1 ? "mode" : "modes"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 flex items-center gap-2">
+        <input
+          className="input"
+          placeholder="Search modes… (e.g. lit review, peer review, abstract)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {(activeSkill || searching) && (
+          <button
+            className="btn-ghost shrink-0 whitespace-nowrap px-3 py-2 text-xs"
+            onClick={() => {
+              setActiveSkill(null);
+              setQ("");
+            }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      <div className="mt-6 space-y-8 pb-8">
+        {grouped.length === 0 && (
+          <p className="py-8 text-center text-sm text-slate-500">
+            No modes match “{q}”. <button className="underline" onClick={() => setQ("")}>Clear search</button>.
+          </p>
+        )}
+        {grouped.map(([skill, list]) => {
           const meta = SKILL_META[skill];
           return (
             <section key={skill}>
@@ -281,19 +431,27 @@ function ModeLauncher({
                   <button
                     key={m.id}
                     onClick={() => onPick(m)}
-                    className={`card text-left transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/[0.07] ${meta?.ring ?? ""}`}
+                    className={`card group/mode text-left transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/[0.07] ${meta?.ring ?? ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-slate-100">{m.title}</span>
                       {m.conversational && (
-                        <span className={`chip border ${meta?.accent ?? "text-indigo-300"}`}>
+                        <Badge variant="outline" className={meta?.accent}>
                           dialogue
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{m.blurb}</p>
-                    <div className="mt-2.5 flex gap-2 text-[10px] uppercase tracking-wider text-slate-600">
-                      <span>{m.spectrum}</span>·<span>{m.oversight} oversight</span>
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="secondary" className="font-normal">
+                        {m.output}
+                      </Badge>
+                      <Badge variant="secondary" className="font-normal">
+                        {m.oversight} oversight
+                      </Badge>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-600">
+                        {m.spectrum}
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -320,15 +478,19 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages]);
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
-    chat.send(input, {
+  function sendText(text: string) {
+    if (!text.trim() || chat.streaming) return;
+    chat.send(text, {
       grounding,
       uploadIds: attachments.length ? attachments.map((a) => a.id) : undefined,
     });
     setInput("");
     setAttachments([]);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    sendText(input);
   }
 
   async function onFiles(files: FileList | null) {
@@ -356,20 +518,29 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
         </span>
         <span className="font-semibold text-slate-100">{mode.title}</span>
         <span className="text-xs text-slate-500">· {mode.output}</span>
+        <ModelPicker className="ml-auto" />
       </div>
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-6">
           {chat.messages.length === 0 && (
-            <div className="card animate-fade-up">
-              <p className="text-slate-300">
-                You're in <b>{mode.title}</b> mode — {mode.blurb}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {mode.conversational
-                  ? "This is a guided dialogue. Start by telling me what you're thinking about."
-                  : "Describe the task or paste your material to begin. Attach a PDF with 📎 if you have one."}
-              </p>
+            <div className="animate-fade-up">
+              <div className="card">
+                <p className="text-slate-300">
+                  You're in <b>{mode.title}</b> mode — {mode.blurb}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {mode.conversational
+                    ? "This is a guided dialogue. Start by telling me what you're thinking about."
+                    : "Describe the task or paste your material to begin. Attach a PDF with 📎 if you have one."}
+                </p>
+              </div>
+              <div className="mt-4">
+                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">
+                  Try a starter
+                </div>
+                <SuggestedActions mode={mode} onPick={(text) => setInput(text)} />
+              </div>
             </div>
           )}
 
@@ -546,18 +717,14 @@ function MessageBubble({
   onSaveEdit: (text: string) => void;
 }) {
   const isUser = message.role === "user";
-  const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState(message.content);
+  const { reasoning, body } = isUser
+    ? { reasoning: null as string | null, body: message.content }
+    : splitReasoning(message.content);
 
   useEffect(() => {
     if (editing) setDraft(message.content);
   }, [editing, message.content]);
-
-  function copy() {
-    onCopy();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   if (isUser && editing) {
     return (
@@ -604,7 +771,8 @@ function MessageBubble({
             <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
           ) : (
             <>
-              <Markdown>{message.content || (streaming ? "" : "")}</Markdown>
+              {reasoning && <MessageReasoning reasoning={reasoning} />}
+              <Markdown>{body}</Markdown>
               {streaming && <span className="cursor-blink ml-0.5 text-indigo-300">▍</span>}
               {message.sources && <SourcesList sources={message.sources} />}
             </>
@@ -614,34 +782,23 @@ function MessageBubble({
         {/* Action row */}
         {!streaming && message.content && (
           <div
-            className={`mt-1 flex items-center gap-2.5 px-1 text-[11px] text-slate-500 opacity-0 transition-opacity group-hover/msg:opacity-100 ${
+            className={`mt-1 px-1 opacity-0 transition-opacity group-hover/msg:opacity-100 ${
               isLast ? "opacity-100" : ""
-            } ${isUser ? "justify-end" : ""}`}
+            } ${isUser ? "flex justify-end" : ""}`}
           >
-            {isUser ? (
-              canAct && (
-                <button className="hover:text-slate-300" onClick={onStartEdit}>
-                  ✏️ Edit
-                </button>
-              )
-            ) : (
-              <>
-                <button className="hover:text-slate-300" onClick={copy}>
-                  {copied ? "✓ Copied" : "⧉ Copy"}
-                </button>
-                {isLast && canAct && (
-                  <button className="hover:text-slate-300" onClick={onRegenerate}>
-                    ↻ Regenerate
-                  </button>
-                )}
-                {isLast && stopped && canAct && (
-                  <button className="text-indigo-400 hover:text-indigo-300" onClick={onContinue}>
-                    ▸ Continue
-                  </button>
-                )}
-                <ExportMenu content={message.content} title={message.content.slice(0, 40)} />
-              </>
-            )}
+            <MessageActions
+              content={body}
+              isUser={isUser}
+              isLast={isLast}
+              canAct={canAct}
+              stopped={stopped}
+              onCopy={onCopy}
+              onRegenerate={onRegenerate}
+              onContinue={onContinue}
+              onStartEdit={onStartEdit}
+            >
+              {!isUser && <ExportMenu content={body} title={body.slice(0, 40)} />}
+            </MessageActions>
           </div>
         )}
       </div>

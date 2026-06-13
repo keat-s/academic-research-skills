@@ -4,8 +4,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * shadcn/ui design tokens, tuned to ARS Studio's existing dark indigo/slate
+ * look so adopted components match the current UI. The app is dark-only today,
+ * so :root carries the dark values directly (a .light block can be added later
+ * if a theme toggle ships).
+ */
 :root {
   color-scheme: dark;
+
+  --background: 222 47% 7%; /* #0b1220 base */
+  --foreground: 213 31% 91%; /* slate-200 */
+
+  --card: 222 40% 11%;
+  --card-foreground: 213 31% 91%;
+  --popover: 222 44% 9%;
+  --popover-foreground: 213 31% 91%;
+
+  --primary: 243 75% 65%; /* indigo-500/400 brand */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 222 30% 16%;
+  --secondary-foreground: 213 31% 91%;
+
+  --muted: 222 25% 16%;
+  --muted-foreground: 215 18% 60%; /* slate-400 */
+  --accent: 222 30% 18%;
+  --accent-foreground: 213 31% 91%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 215 20% 30% / 0.18;
+  --input: 215 20% 40% / 0.16;
+  --ring: 243 75% 70%;
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
 html,
