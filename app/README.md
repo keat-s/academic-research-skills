@@ -84,13 +84,27 @@ package breakdown, and [docs/PACKAGING.md](docs/PACKAGING.md) for native builds.
 
 ## Quick start (dev)
 
+Prereqs: **Node ≥ 20** and **pnpm 10** (`npm i -g pnpm`).
+
 ```bash
 cd app
 cp .env.example .env          # set ARS_JWT_SECRET; OPENROUTER_API_KEY optional
-pnpm install
-pnpm --filter ./packages/core build
+pnpm install                  # builds the native better-sqlite3 binding
+pnpm --filter ./packages/core build   # server + web import @ars/core's dist
 pnpm dev                      # server :8787 + web :5173
 ```
+
+Open http://localhost:5173, sign up, pick a mode.
+
+**Gotchas**
+- If you see `better-sqlite3 ... was compiled against a different Node` or a
+  missing-binding error, run `pnpm rebuild better-sqlite3` (the native addon
+  needs compiling for your platform; `onlyBuiltDependencies` allows it but a
+  rebuild is the fix if it gets skipped).
+- After editing anything in `packages/core`, rebuild it
+  (`pnpm --filter ./packages/core build`) — `pnpm dev` doesn't watch it.
+- Run the tests anytime: `pnpm test` (unit) and `pnpm e2e` (Playwright;
+  `npx playwright install chromium` first).
 
 Open http://localhost:5173, sign up, pick a mode, start chatting.
 
