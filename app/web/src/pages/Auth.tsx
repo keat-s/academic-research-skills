@@ -1,11 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authClient } from "../lib/auth-client";
+import { api } from "../api";
 
 const PROVIDER_LABELS: Record<string, string> = { google: "Google", github: "GitHub" };
-// Social providers are config-gated on the server; we surface buttons for the
-// providers the build expects. Clicking a disabled provider simply errors back.
-const SOCIAL_PROVIDERS: ("google" | "github")[] = ["google", "github"];
 
 const ERROR_COPY: Record<string, string> = {
   INVALID_EMAIL: "That doesn't look like a valid email.",
@@ -28,6 +26,12 @@ export function AuthPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  // Only show a social button for a provider the server has actually configured.
+  const [providers, setProviders] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.socialProviders().then(setProviders).catch(() => setProviders([]));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,10 +87,15 @@ export function AuthPage() {
       <h1 className="text-2xl font-bold text-white">{title}</h1>
       <p className="mt-1 text-sm text-slate-400">No subscription. AI features are free.</p>
 
-      {mode !== "forgot" && (
+      {mode !== "forgot" && providers.length > 0 && (
         <div className="mt-6 space-y-2">
-          {SOCIAL_PROVIDERS.map((p) => (
-            <button key={p} type="button" className="btn-ghost w-full" onClick={() => social(p)}>
+          {providers.map((p) => (
+            <button
+              key={p}
+              type="button"
+              className="btn-ghost w-full"
+              onClick={() => social(p as "google" | "github")}
+            >
               Continue with {PROVIDER_LABELS[p] ?? p}
             </button>
           ))}

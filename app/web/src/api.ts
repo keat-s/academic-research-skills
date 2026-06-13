@@ -64,6 +64,8 @@ export type ExportFormat = "md" | "html" | "latex" | "rtf" | "docx" | "pdf";
 export const api = {
   health: () => jsonFetch<{ ok: boolean; sharedKey: boolean; freeDailyMessages: number }>("/health"),
   modes: () => jsonFetch<{ modes: Mode[] }>("/modes").then((r) => r.modes),
+  socialProviders: () =>
+    jsonFetch<{ providers: string[] }>("/social-providers").then((r) => r.providers),
   monetization: () => jsonFetch<MonetizationConfig>("/monetization"),
 
   // Auth (sign-up / sign-in / verification / reset / social) is owned by

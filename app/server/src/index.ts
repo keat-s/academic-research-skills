@@ -55,6 +55,19 @@ app.get("/api/health", (c) =>
 // Public mode catalogue (no auth) so the launcher renders before login.
 app.get("/api/modes", (c) => c.json({ modes: MODES }));
 
+// Which social providers are actually configured — the login page only renders
+// a button for a provider whose client id + secret are both set, so users never
+// see a button that would error on click. (better-auth registers a provider
+// only when configured; this just mirrors that gate to the UI.)
+app.get("/api/social-providers", (c) =>
+  c.json({
+    providers: [
+      env.oauth.google.clientId && env.oauth.google.clientSecret ? "google" : null,
+      env.oauth.github.clientId && env.oauth.github.clientSecret ? "github" : null,
+    ].filter((p): p is string => !!p),
+  })
+);
+
 // Privacy-preserving aggregate metrics (counts only, no content). Gated by a
 // token so it isn't world-readable; disabled if ARS_METRICS_TOKEN is unset.
 app.get("/api/metrics", (c) => {
