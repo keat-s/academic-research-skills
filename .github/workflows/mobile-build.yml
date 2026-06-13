@@ -1,0 +1,80 @@
+name: mobile-build
+
+# Builds the Capacitor Android app (debug APK) from the shared web bundle, and
+# verifies the iOS project generates (a signed IPA requires an Apple developer
+# account + secrets, left to the deployer — see app/docs/PACKAGING.md).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./packages/core build
+      - name: Build web bundle
+        run: pnpm --filter ./web build
+        env:
+          ARS_JWT_SECRET: ci
+
+      - name: Add Android platform + sync
+        working-directory: app/web
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Assemble debug APK
+        working-directory: app/web/android
+        run: ./gradlew assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ars-studio-android-debug
+          path: app/web/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+  ios-project:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter ./packages/core build
+      - run: pnpm --filter ./web build
+        env:
+          ARS_JWT_SECRET: ci
+      - name: Generate iOS project
+        working-directory: app/web
+        run: |
+          npx cap add ios || true
+          npx cap sync ios
+      # A signed .ipa needs APPLE_* secrets + a provisioning profile; wire those
+      # in here when ready. This job just proves the project generates.

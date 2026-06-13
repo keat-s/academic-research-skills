@@ -1,0 +1,169 @@
+@import "@fontsource-variable/inter";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  color: #e2e8f0;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(139, 92, 246, 0.1), transparent 60%),
+    #0b1220;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  /* iOS safe areas for the Capacitor build */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+::selection {
+  background: rgba(129, 140, 248, 0.35);
+}
+
+/* Slim, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
+      transition-all duration-150 focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-indigo-400/60 active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn text-white shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none;
+    background-image: linear-gradient(135deg, #6366f1, #8b5cf6);
+  }
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.12);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  }
+  .btn-ghost {
+    @apply btn border border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10 disabled:opacity-40;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-slate-100
+      placeholder:text-slate-500 transition-colors focus:border-indigo-400/70 focus:bg-white/[0.07]
+      focus:outline-none focus:ring-1 focus:ring-indigo-400/40;
+  }
+  .card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider;
+  }
+}
+
+/* Entry animations */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.cursor-blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+/* Markdown prose */
+.prose-ars {
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+.prose-ars > :first-child {
+  margin-top: 0;
+}
+.prose-ars > :last-child {
+  margin-bottom: 0;
+}
+.prose-ars h1,
+.prose-ars h2,
+.prose-ars h3,
+.prose-ars h4 {
+  @apply font-semibold text-slate-50 mt-5 mb-2;
+}
+.prose-ars h1 {
+  @apply text-xl;
+}
+.prose-ars h2 {
+  @apply text-lg;
+}
+.prose-ars h3 {
+  @apply text-base;
+}
+.prose-ars p {
+  @apply my-2.5;
+}
+.prose-ars ul,
+.prose-ars ol {
+  @apply my-2.5 pl-6 list-disc space-y-1;
+}
+.prose-ars ol {
+  @apply list-decimal;
+}
+.prose-ars code {
+  @apply rounded-md bg-black/40 px-1.5 py-0.5 text-[0.85em] text-indigo-200;
+}
+.prose-ars pre {
+  @apply my-3 overflow-x-auto rounded-xl border border-white/10 bg-black/50 p-3.5 text-xs leading-relaxed;
+}
+.prose-ars pre code {
+  @apply bg-transparent p-0 text-slate-200;
+}
+.prose-ars a {
+  @apply text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 hover:decoration-indigo-300;
+}
+.prose-ars blockquote {
+  @apply border-l-2 border-indigo-400/40 pl-3.5 italic text-slate-400 my-3;
+}
+.prose-ars table {
+  @apply my-3 w-full border-collapse text-sm;
+}
+.prose-ars th {
+  @apply border border-white/10 bg-white/5 px-2.5 py-1.5 text-left font-semibold;
+}
+.prose-ars td {
+  @apply border border-white/10 px-2.5 py-1.5 text-left;
+}
+.prose-ars hr {
+  @apply my-4 border-white/10;
+}

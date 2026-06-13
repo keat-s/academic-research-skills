@@ -1,0 +1,50 @@
+name: app-ci
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/**"
+      - ".github/workflows/app-ci.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - ".github/workflows/app-ci.yml"
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build core
+        run: pnpm --filter ./packages/core build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Unit tests
+        run: pnpm -r test
+
+      - name: Build server + web
+        run: |
+          pnpm --filter ./server build
+          pnpm --filter ./web build
+        env:
+          ARS_JWT_SECRET: ci-test-secret
