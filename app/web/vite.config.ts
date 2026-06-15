@@ -5,6 +5,22 @@ import { VitePWA } from "vite-plugin-pwa";
 
 const API_TARGET = process.env.VITE_API_PROXY ?? "http://localhost:8787";
 
+// Build-time guard: a packaged target (Capacitor / Tauri) loads from
+// capacitor://localhost or tauri://localhost, so a relative VITE_API_BASE
+// ("/api") resolves against that shell origin and every API call 404s. When a
+// packaged build is requested (ARS_PACKAGED_TARGET set by the CI step), require
+// an absolute API origin and fail the build loudly otherwise.
+const API_BASE = process.env.VITE_API_BASE;
+const PACKAGED_TARGET = process.env.ARS_PACKAGED_TARGET; // "capacitor" | "tauri"
+if (PACKAGED_TARGET && (!API_BASE || API_BASE.startsWith("/"))) {
+  throw new Error(
+    `[vite] Building for packaged target "${PACKAGED_TARGET}" requires an absolute ` +
+      `VITE_API_BASE (got "${API_BASE ?? "unset"}"). A relative base resolves to ` +
+      `${PACKAGED_TARGET}://localhost inside the app shell and every API call 404s. ` +
+      `Set VITE_API_BASE to your hosted API origin, e.g. https://api.example.com.`
+  );
+}
+
 export default defineConfig({
   resolve: {
     alias: {

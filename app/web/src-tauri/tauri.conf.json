@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:8787 https://openrouter.ai; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:8787 https://api.crossref.org https://api.openalex.org https://api.semanticscholar.org https://openrouter.ai; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
     }
   },
   "bundle": {

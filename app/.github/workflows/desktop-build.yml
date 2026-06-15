@@ -52,6 +52,13 @@ jobs:
       - name: Build Tauri app
         working-directory: web
         run: pnpm tauri build --target ${{ matrix.target }}
+        env:
+          ARS_JWT_SECRET: ci
+          # Absolute hosted API origin baked into the desktop bundle. Set repo
+          # variable ARS_API_BASE. The build FAILS if unset — a relative /api
+          # 404s inside tauri://localhost.
+          VITE_API_BASE: ${{ vars.ARS_API_BASE }}
+          ARS_PACKAGED_TARGET: tauri
 
       - uses: actions/upload-artifact@v4
         with:

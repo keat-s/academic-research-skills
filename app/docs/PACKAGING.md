@@ -6,6 +6,26 @@ the native artifacts and what each store needs. The CI workflows
 artifacts; signing and store upload require accounts + secrets only the project
 owner can provide, so those steps are documented rather than automated.
 
+## API origin — required for packaged builds (read this first)
+The web client reads its API base from `VITE_API_BASE` (falls back to a relative
+`/api`). A relative base is fine for the **web/PWA** target (same origin as the
+server) but is **broken for Capacitor and Tauri**: those load from
+`capacitor://localhost` / `tauri://localhost`, so `/api` resolves against the app
+shell and every request 404s.
+
+- Set the GitHub repo **variable** `ARS_API_BASE` (Settings → Secrets and
+  variables → Actions → Variables) to your absolute hosted API origin, e.g.
+  `https://api.arsstudio.app`. The mobile/desktop workflows inject it at build.
+- The web build hard-fails for a packaged target when `VITE_API_BASE` is missing
+  or relative (guard in `vite.config.ts`, keyed on `ARS_PACKAGED_TARGET`). This
+  is intentional — better a loud build failure than a silently dead artifact.
+- **Tauri CSP:** `web/src-tauri/tauri.conf.json` `app.security.csp` whitelists
+  `connect-src`. It ships with `localhost:8787` (dev), the scholarly hosts, and
+  `openrouter.ai`. For release you **must add your `ARS_API_BASE` origin** to
+  `connect-src` (and should drop `http://localhost:8787`), or the desktop app's
+  API calls are blocked by the webview. Either edit the file or pass
+  `tauri build --config '{"app":{"security":{"csp":"…"}}}'` in CI.
+
 ## Web / PWA
 `pnpm --filter ./web build` → `app/web/dist`. Deploy the static bundle to any
 host (Netlify, Vercel, Cloudflare Pages, S3). The PWA is installable as-is. Set
