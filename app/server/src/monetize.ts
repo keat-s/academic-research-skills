@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { MonetizationConfig } from "@ars/core";
 
 // License-safe monetization config (CC-BY-NC 4.0).
 //
@@ -7,23 +8,9 @@ import { Hono } from "hono";
 // (affiliate / grants), or non-intrusive (a single optional ad slot that the
 // licensor can disable). Everything is config-driven so the deployer can turn
 // channels on/off without code changes. See app/docs/MONETIZATION.md.
-
-export interface MonetizationConfig {
-  donations: { label: string; url: string }[];
-  sponsorTiers: { name: string; blurb: string; url: string }[];
-  affiliates: { label: string; url: string; note: string }[];
-  grants: { label: string; url: string }[];
-  ads: {
-    enabled: boolean;
-    provider: string; // e.g. "ethicalads" | "carbon"
-    publisherId: string;
-    note: string;
-  };
-  byok: {
-    enabled: boolean;
-    note: string;
-  };
-}
+//
+// MonetizationConfig is defined in packages/core/src/types.ts (canonical).
+export type { MonetizationConfig };
 
 // Defaults are env-overridable so a fork can drop in its own links/IDs.
 const env = process.env;

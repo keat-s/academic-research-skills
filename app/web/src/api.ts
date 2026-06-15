@@ -1,4 +1,4 @@
-import type { Mode, ChatMessage, ModelInfo } from "@ars/core";
+import type { Mode, ChatMessage, ModelInfo, MonetizationConfig, ScholarlyResult } from "@ars/core";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -49,15 +49,13 @@ export interface UploadInfo {
   preview?: string;
 }
 
-export interface SourceRef {
-  title: string;
-  authors: string[];
-  year?: number;
-  venue?: string;
-  doi?: string;
-  url?: string;
-  source: string;
-}
+/**
+ * SourceRef is an alias for ScholarlyResult from @ars/core.
+ * The two types were previously hand-kept in sync; they are now unified here.
+ * `source` on ScholarlyResult is the narrower union "crossref"|"openalex"|"semanticscholar"
+ * which is a subtype of the former `string`, so all existing consumers are compatible.
+ */
+export type SourceRef = ScholarlyResult;
 
 export type ExportFormat = "md" | "html" | "latex" | "rtf" | "docx" | "pdf";
 
@@ -162,14 +160,10 @@ export interface StoredMessage {
   content: string;
   created_at: number;
 }
-export interface MonetizationConfig {
-  donations: { label: string; url: string }[];
-  sponsorTiers: { name: string; blurb: string; url: string }[];
-  affiliates: { label: string; url: string; note: string }[];
-  grants: { label: string; url: string }[];
-  ads: { enabled: boolean; provider: string; publisherId: string; note: string };
-  byok: { enabled: boolean; note: string };
-}
+// MonetizationConfig is defined in @ars/core (packages/core/src/types.ts).
+// Imported at the top and re-exported here so existing consumers in the web
+// package don't need to change their import paths.
+export type { MonetizationConfig };
 
 export interface ChatStreamHandlers {
   onMeta?: (meta: { conversationId: string; model: string }) => void;

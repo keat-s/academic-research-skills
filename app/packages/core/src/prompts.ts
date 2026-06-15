@@ -1,5 +1,8 @@
 // Global ARS contract injected into every mode's system prompt.
 //
+// Also exports shared prompt helpers used on both the server and the web
+// (WebLLM) paths so the two sides stay in sync without hand-editing.
+//
 // This is a faithful single-model adaptation of the Academic Research Skills
 // suite's "Key Rules" (.claude/CLAUDE.md) and the human-in-the-loop premise
 // from the README. The full suite runs a 13-agent team; ARS Studio runs one
@@ -41,4 +44,22 @@ export function buildSystemPrompt(modeSpecificInstructions: string): string {
   return [ARS_CORE_CONTRACT, ARS_CITATION_NOTE, modeSpecificInstructions].join(
     "\n\n"
   );
+}
+
+/**
+ * Preamble injected before attached-document text in the system prompt.
+ * Used verbatim on both the server (ai.ts /chat) and the web (webllmTurn.ts)
+ * so the two paths produce identical context layout.
+ *
+ * Usage: `UPLOAD_PROMPT_PREFIX + docs.join("\n\n")`
+ */
+export const UPLOAD_PROMPT_PREFIX =
+  "The user attached the following document(s). Use them as the primary material:\n\n";
+
+/**
+ * Build the system-message content block for one or more attached documents.
+ * Each `doc` is the pre-formatted string `"--- DOCUMENT: <filename> ---\n<text>"`.
+ */
+export function buildUploadBlock(docs: string[]): string {
+  return UPLOAD_PROMPT_PREFIX + docs.join("\n\n");
 }

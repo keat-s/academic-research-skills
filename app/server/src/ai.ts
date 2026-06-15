@@ -8,6 +8,7 @@ import {
   listOllamaModels,
   fetchFreeModels,
   searchScholarly,
+  buildUploadBlock,
   DEFAULT_FREE_MODELS,
   DEFAULT_MODEL,
   type ChatMessage,
@@ -119,6 +120,11 @@ aiRoutes.get("/conversations/:id", (c) => {
 
 // Truncate a conversation at its k-th user message (1-based): that message and
 // everything after it are deleted. Powers edit-and-resend and regenerate.
+//
+// k-th user-turn truncation contract (server side; canonical doc in web/src/useChat.ts):
+// `fromUserTurn` is a 1-based index over stored role="user" rows only.
+// kthUserMessageAt uses a 0-based SQL OFFSET (k-1) to find the anchor row's
+// created_at, then deleteMessagesFrom removes that row and all later rows.
 aiRoutes.post("/conversations/:id/truncate", async (c) => {
   const userId = c.get("userId") as string;
   const id = c.req.param("id");
@@ -206,12 +212,9 @@ aiRoutes.post("/chat", async (c) => {
   if (Array.isArray(body.uploadIds) && body.uploadIds.length > 0) {
     const docs = loadUploadTexts(userId, body.uploadIds);
     if (docs.length > 0) {
-      const block = docs
-        .map((d) => `--- DOCUMENT: ${d.filename} ---\n${d.text}`)
-        .join("\n\n");
       messages.splice(1, 0, {
         role: "system",
-        content: `The user attached the following document(s). Use them as the primary material:\n\n${block}`,
+        content: buildUploadBlock(docs.map((d) => `--- DOCUMENT: ${d.filename} ---\n${d.text}`)),
       });
     }
   }

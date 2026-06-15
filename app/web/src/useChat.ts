@@ -181,7 +181,23 @@ export function useChat(modeId: string): UseChat {
       if (!trimmed || streaming) return;
       const target = messages[index];
       if (!target || target.role !== "user") return;
-      // Ordinal (1-based) of this user message — the server-side truncate anchor.
+      // k-th user-turn truncation contract (canonical; server backpointer in server/src/ai.ts):
+      //
+      // `k` is the 1-based ordinal of the target user message among ALL user messages
+      // in the current UI conversation (system messages are not counted). Example:
+      //   messages = [user, assistant, user*, assistant]  →  k = 2  (second user turn)
+      //
+      // The server endpoint POST /conversations/:id/truncate receives { fromUserTurn: k }
+      // and deletes the k-th user message (0-indexed offset k-1 via kthUserMessageAt) and
+      // every message after it. After the DELETE the client re-sends from that turn,
+      // producing a clean branch in the stored history.
+      //
+      // Invariants that must hold for both sides to stay in sync:
+      //   - Client counts only role="user" rows (no system rows in UI messages).
+      //   - Server counts only role="user" rows stored in the messages table.
+      //   - k >= 1 always (enforced by the server; 0 or negative → 400 bad_request).
+      //   - The client calls truncate BEFORE dispatching the new turn so the server
+      //     row count matches the post-truncation UI state.
       const k = messages.slice(0, index + 1).filter((m) => m.role === "user").length;
       const base = messages.slice(0, index);
       const run = () => {

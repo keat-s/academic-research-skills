@@ -1,8 +1,8 @@
 import {
   systemPromptFor,
   formatSourcesBlock,
+  buildUploadBlock,
   type ChatMessage,
-  type ScholarlyResult,
 } from "@ars/core";
 import { api, type ChatStreamHandlers } from "./api";
 import { streamWebLLM } from "./webllm";
@@ -48,7 +48,7 @@ export function runWebLLMTurn(body: WebLLMTurnBody, handlers: ChatStreamHandlers
         if (docs.length) {
           msgs.push({
             role: "system",
-            content: `The user attached the following document(s). Use them as the primary material:\n\n${docs.join("\n\n")}`,
+            content: buildUploadBlock(docs),
           });
         }
       }
@@ -60,7 +60,7 @@ export function runWebLLMTurn(body: WebLLMTurnBody, handlers: ChatStreamHandlers
           const sources = await api.search(userText);
           msgs.push({
             role: "system",
-            content: formatSourcesBlock(sources as unknown as ScholarlyResult[]),
+            content: formatSourcesBlock(sources),
           });
           handlers.onSources?.({ sources, queries: [userText] });
         } catch {

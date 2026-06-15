@@ -50,3 +50,26 @@ export interface ChatRequest {
   apiKey?: string;
   temperature?: number;
 }
+
+/**
+ * License-safe monetization configuration (CC-BY-NC 4.0).
+ * Canonical definition lives here in core so both the server (monetize.ts)
+ * and the web client (api.ts) share a single source of truth.
+ */
+export interface MonetizationConfig {
+  donations: { label: string; url: string }[];
+  sponsorTiers: { name: string; blurb: string; url: string }[];
+  affiliates: { label: string; url: string; note: string }[];
+  grants: { label: string; url: string }[];
+  ads: {
+    enabled: boolean;
+    /** e.g. "ethicalads" | "carbon" */
+    provider: string;
+    publisherId: string;
+    note: string;
+  };
+  byok: {
+    enabled: boolean;
+    note: string;
+  };
+}
