@@ -24,7 +24,7 @@ export function mergeAssistantRuns(rows: { role: "user" | "assistant"; content: 
     if (last && last.role === "assistant" && r.role === "assistant") {
       last.content += r.content;
     } else {
-      out.push({ role: r.role, content: r.content });
+      out.push({ id: crypto.randomUUID(), role: r.role, content: r.content });
     }
   }
   return out;

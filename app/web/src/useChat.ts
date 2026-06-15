@@ -2,8 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import type { ChatMessage } from "@ars/core";
 import { api, streamChat, type SourceRef, type ChatStreamHandlers } from "./api";
 import { loadSettings } from "./settings";
+import { DEFAULT_WEBLLM_MODEL } from "./webllm";
 
 export interface UiMessage extends ChatMessage {
+  id: string;
   role: "user" | "assistant";
   sources?: SourceRef[];
 }
@@ -73,7 +75,7 @@ export function useChat(modeId: string): UseChat {
 
       // appendToLast: continue-mode — stream into the existing last assistant
       // bubble instead of opening a new one.
-      setMessages(opts.appendToLast ? uiBefore : [...uiBefore, { role: "assistant", content: "" }]);
+      setMessages(opts.appendToLast ? uiBefore : [...uiBefore, { id: crypto.randomUUID(), role: "assistant", content: "" }]);
       setStreaming(true);
 
       const { apiKey, model, provider, localModel, webllmModel, grounding } = loadSettings();
@@ -135,7 +137,7 @@ export function useChat(modeId: string): UseChat {
               modeId,
               conversationId: opts.convId ?? undefined,
               messages: outgoing,
-              webllmModel: webllmModel || "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+              webllmModel: webllmModel || DEFAULT_WEBLLM_MODEL,
               grounding: useGrounding && !opts.skipUserPersist,
               uploadIds: opts.uploadIds,
               continuation: opts.skipUserPersist,
@@ -167,7 +169,7 @@ export function useChat(modeId: string): UseChat {
     (text: string, opts: SendOptions = {}) => {
       const trimmed = text.trim();
       if (!trimmed || streaming) return;
-      const userMsg: UiMessage = { role: "user", content: trimmed };
+      const userMsg: UiMessage = { id: crypto.randomUUID(), role: "user", content: trimmed };
       const ui = [...messages, userMsg];
       dispatch(ui, ui, { ...opts, convId: conversationId });
     },
@@ -201,7 +203,7 @@ export function useChat(modeId: string): UseChat {
       const k = messages.slice(0, index + 1).filter((m) => m.role === "user").length;
       const base = messages.slice(0, index);
       const run = () => {
-        const ui = [...base, { role: "user", content: trimmed } as UiMessage];
+        const ui = [...base, { id: crypto.randomUUID(), role: "user", content: trimmed } as UiMessage];
         dispatch(ui, ui, { convId: conversationId });
       };
       if (conversationId) {

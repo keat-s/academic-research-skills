@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, Check, RotateCcw, Play, Pencil, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Copy, Check, RotateCcw, Play, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -8,8 +8,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-
-type Feedback = "up" | "down" | null;
 
 export interface MessageActionsProps {
   content: string;
@@ -64,16 +62,11 @@ export function MessageActions({
   children,
 }: MessageActionsProps) {
   const [copied, setCopied] = React.useState(false);
-  const [feedback, setFeedback] = React.useState<Feedback>(null);
 
   function handleCopy() {
     onCopy();
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }
-
-  function handleFeedback(value: "up" | "down") {
-    setFeedback((prev) => (prev === value ? null : value));
   }
 
   return (
@@ -108,22 +101,6 @@ export function MessageActions({
                 <Play className="h-3.5 w-3.5" />
               </IconButton>
             )}
-
-            <IconButton
-              label="Good response"
-              onClick={() => handleFeedback("up")}
-              className={cn(feedback === "up" && "text-green-500")}
-            >
-              <ThumbsUp className="h-3.5 w-3.5" />
-            </IconButton>
-
-            <IconButton
-              label="Bad response"
-              onClick={() => handleFeedback("down")}
-              className={cn(feedback === "down" && "text-red-500")}
-            >
-              <ThumbsDown className="h-3.5 w-3.5" />
-            </IconButton>
           </>
         )}
 

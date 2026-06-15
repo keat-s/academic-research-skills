@@ -96,7 +96,7 @@ export function Studio() {
             <img src={scioMark} alt="" className="h-7 w-7" />
             <span className="text-base font-bold text-foreground">ARS Studio</span>
           </button>
-          <button className="text-muted-foreground md:hidden" onClick={() => setSidebarOpen(false)}>
+          <button className="text-muted-foreground md:hidden" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
             <X size={16} strokeWidth={2} />
           </button>
         </div>
@@ -135,6 +135,7 @@ export function Studio() {
                 onClick={() => removeConversation(c.id)}
                 className="mr-1 hidden rounded p-1 text-muted-foreground hover:text-destructive group-hover:block"
                 title="Delete"
+                aria-label="Delete conversation"
               >
                 <Trash2 size={14} strokeWidth={2} />
               </button>
@@ -154,7 +155,7 @@ export function Studio() {
               <div className="h-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${(quota.remaining / Math.max(1, quota.limit)) * 100}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, (quota.remaining / Math.max(1, quota.limit)) * 100))}%` }}
                 />
               </div>
             </div>
@@ -173,7 +174,7 @@ export function Studio() {
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 border-b border-border bg-background px-4 py-2 md:hidden">
-          <button className="btn-ghost px-3 py-1.5" onClick={() => setSidebarOpen(true)}>
+          <button className="btn-ghost px-3 py-1.5" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
             <Menu size={16} strokeWidth={2} />
           </button>
           <span className="truncate font-semibold text-foreground">{activeMode?.title ?? "ARS Studio"}</span>

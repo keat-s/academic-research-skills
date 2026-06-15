@@ -19,10 +19,10 @@ export function SourcesList({ sources }: { sources: SourceRef[] }) {
       </button>
       {open && (
         <ol className="mt-2.5 space-y-2.5 pl-0">
-          {sources.map((s, i) => (
-            <li key={i} className="flex items-start gap-2">
+          {sources.map((s, idx) => (
+            <li key={s.doi ?? s.title} className="flex items-start gap-2">
               <span className="mt-0.5 shrink-0 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-[10px] leading-none text-[color:var(--accent-text)]">
-                {i + 1}
+                {idx + 1}
               </span>
               <div className="min-w-0 flex-1">
                 {s.doi ? (

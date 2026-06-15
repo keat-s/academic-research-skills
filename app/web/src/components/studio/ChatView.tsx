@@ -28,16 +28,28 @@ function Spinner() {
 
 export function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
   const [input, setInput] = useState("");
+  // Grounding toggle: seeds from settings once per mode session, then acts as
+  // an explicit session override. It resets whenever the parent picks a new mode
+  // (ChatView unmounts+remounts). Changes here do NOT write back to settings —
+  // use the Settings page for persistent defaults.
   const [grounding, setGrounding] = useState(loadSettings().grounding);
   const [attachments, setAttachments] = useState<UploadInfo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const meta = SKILL_META[mode.skill];
 
+  // Auto-scroll: only snap to bottom when already near the bottom (<120px away).
+  // This prevents yanking a user who has scrolled up to review earlier messages.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 120) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [chat.messages]);
 
   function sendText(text: string) {
@@ -85,7 +97,7 @@ export function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
         <ModelPicker className="ml-auto" />
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-background">
+      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto bg-background">
         <div className="mx-auto max-w-3xl px-4 py-6">
           {chat.messages.length === 0 && (
             <div className="animate-fade-up">
@@ -110,7 +122,7 @@ export function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
 
           {chat.messages.map((m, i) => (
             <MessageBubble
-              key={i}
+              key={m.id}
               message={m}
               streaming={chat.streaming && i === lastIndex}
               isLast={i === lastIndex}
@@ -201,6 +213,7 @@ export function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
               type="button"
               className="btn-ghost px-3"
               title="Attach a document (PDF or text)"
+              aria-label="Attach a document (PDF or text)"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
             >

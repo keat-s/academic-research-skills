@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import { ChevronsUpDown } from "lucide-react";
 import type { ModelInfo } from "@ars/core";
 import { Button } from "@/components/ui/button";
@@ -108,9 +109,9 @@ export function ModelPicker({
 
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href="/settings" className="cursor-pointer">
+          <Link to="/settings" className="cursor-pointer">
             Backend &amp; keys in Settings
-          </a>
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

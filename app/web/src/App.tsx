@@ -16,7 +16,7 @@ function Protected({ children }: { children: JSX.Element }) {
 }
 
 function FullScreen({ children }: { children: React.ReactNode }) {
-  return <div className="grid h-full place-items-center text-slate-400">{children}</div>;
+  return <div className="grid h-full place-items-center text-muted-foreground">{children}</div>;
 }
 
 export function App() {
