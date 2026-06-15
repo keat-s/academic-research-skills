@@ -21,8 +21,8 @@ export default defineConfig({
         short_name: "ARS Studio",
         description:
           "AI-native academic research, writing, and review — free, built on the Academic Research Skills suite.",
-        theme_color: "#0f172a",
-        background_color: "#0f172a",
+        theme_color: "#FBFBF9",
+        background_color: "#FBFBF9",
         display: "standalone",
         start_url: "/",
         icons: [
