@@ -189,6 +189,22 @@ export const legacyStmts = {
     : null,
 };
 
+// --- clean shutdown helper ---------------------------------------------------
+// Called by the SIGTERM/SIGINT handler in index.ts to flush the WAL and close
+// gracefully before the process exits. Safe to call multiple times (SQLite's
+// close is idempotent on an already-closed handle; we guard with a flag).
+let _closed = false;
+export function closeDb(): void {
+  if (_closed) return;
+  _closed = true;
+  try {
+    // Checkpoint the WAL into the main DB file so nothing is left in -wal.
+    db.pragma("wal_checkpoint(TRUNCATE)");
+  } finally {
+    db.close();
+  }
+}
+
 // --- domain prepared statements ----------------------------------------------
 export const stmts = {
   insertConversation: db.prepare(

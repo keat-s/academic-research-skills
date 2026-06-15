@@ -14,9 +14,24 @@ import { monetizeRoutes } from "./monetize.js";
 import { tipRoutes } from "./tips.js";
 import { edgeRateLimit } from "./edge_ratelimit.js";
 import { summary } from "./analytics.js";
-import "./db.js";
+import { db, closeDb } from "./db.js";
+import { log } from "./logger.js";
 
 const app = new Hono();
+
+// Assign a request id early so every downstream log entry can correlate back
+// to the originating request. Honor an incoming `x-request-id` from a trusted
+// upstream proxy so the id is preserved end-to-end.
+app.use("*", async (c, next) => {
+  const incoming = c.req.header("x-request-id");
+  const requestId =
+    incoming && incoming.length > 0 && incoming.length <= 128
+      ? incoming
+      : crypto.randomUUID();
+  c.set("requestId" as never, requestId);
+  c.header("x-request-id", requestId);
+  await next();
+});
 
 app.use("*", logger());
 app.use("*", secureHeaders());
@@ -32,10 +47,27 @@ app.use(
   })
 );
 
+// Structured error handler: log with request context and return a clean JSON
+// 500 rather than leaking stack traces to clients.
+app.onError((err, c) => {
+  const requestId = (c.get("requestId" as never) as string | undefined) ?? "unknown";
+  log.error("unhandled request error", {
+    requestId,
+    method: c.req.method,
+    path: c.req.path,
+    err: err.message,
+    stack: err.stack,
+  });
+  return c.json({ error: "internal_server_error", requestId }, 500);
+});
+
 // Per-IP abuse limiting on the mutable surfaces.
 app.use("/api/auth/*", edgeRateLimit);
 app.use("/api/ai/*", edgeRateLimit);
 
+// Liveness: static, always fast. Kubernetes/Fly.io restarts the pod when this
+// returns non-2xx. It deliberately does NOT probe the DB — a slow DB read
+// would cause a restart storm; use /api/ready for that.
 app.get("/api/health", (c) =>
   c.json({
     ok: true,
@@ -51,6 +83,18 @@ app.get("/api/health", (c) =>
     },
   })
 );
+
+// Readiness: probes the DB with a cheap SELECT 1. Load balancers / init
+// containers should poll this before sending traffic. Returns 503 on failure.
+app.get("/api/ready", (c) => {
+  try {
+    db.prepare("SELECT 1").get();
+    return c.json({ ok: true, db: "up" });
+  } catch (err) {
+    log.error("readiness check failed", { err: err instanceof Error ? err.message : String(err) });
+    return c.json({ ok: false, db: "down" }, 503);
+  }
+});
 
 // Public mode catalogue (no auth) so the launcher renders before login.
 app.get("/api/modes", (c) => c.json({ modes: MODES }));
@@ -93,8 +137,37 @@ app.route("/api/tips", tipRoutes);
 const port = env.port;
 if (process.env.NODE_ENV !== "test") {
   serve({ fetch: app.fetch, port }, (info) => {
-    // eslint-disable-next-line no-console
-    console.log(`ARS Studio server on http://localhost:${info.port} (sharedKey=${hasSharedKey})`);
+    log.info("ARS Studio server started", { port: info.port, sharedKey: hasSharedKey });
+  });
+
+  // Graceful shutdown: flush the WAL and close SQLite before the process dies.
+  // SIGTERM is sent by container runtimes (Docker, Fly.io, k8s); SIGINT is
+  // Ctrl-C in dev (but NODE_ENV !== "test" keeps this out of the test runner).
+  function shutdown(signal: string): void {
+    log.info("shutdown signal received", { signal });
+    try {
+      closeDb();
+    } catch (err) {
+      log.error("error during db shutdown", { err: err instanceof Error ? err.message : String(err) });
+    }
+    process.exit(0);
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
+  // Catch-all for async errors that escaped all try/catch handlers.
+  process.on("unhandledRejection", (reason) => {
+    log.error("unhandledRejection", {
+      err: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+
+  // Catch-all for synchronous throws that escaped all try/catch handlers.
+  // Log then re-throw so Node's default exit-code behavior is preserved.
+  process.on("uncaughtException", (err) => {
+    log.error("uncaughtException", { err: err.message, stack: err.stack });
+    process.exit(1);
   });
 }
 

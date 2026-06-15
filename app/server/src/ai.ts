@@ -19,6 +19,7 @@ import { consume, getQuota, allowAction } from "./ratelimit.js";
 import { ground } from "./grounding.js";
 import { loadUploadTexts } from "./uploads.js";
 import { track } from "./analytics.js";
+import { log } from "./logger.js";
 import type { Env } from "./types.js";
 
 export const aiRoutes = new Hono<Env>();
@@ -185,7 +186,9 @@ aiRoutes.post("/chat", async (c) => {
       );
     }
   }
-  track("chat", { userId, modeId: body.modeId, meta: { grounding: !!body.grounding, provider: body.provider ?? "openrouter" } });
+  // NOTE: track("chat") is emitted inside the stream handler on success or
+  // failure — not here — so a failed generation is distinguishable from a
+  // completed one in the analytics events table.
 
   const model = body.model || DEFAULT_MODEL;
   const messages: ChatMessage[] = [{ role: "system", content: system }, ...body.messages];
@@ -249,6 +252,10 @@ aiRoutes.post("/chat", async (c) => {
             ac.signal
           );
 
+    // Capture the request id for correlation in error logs. The middleware
+    // stores it on the context; fall back gracefully if somehow absent.
+    const requestId = (c.get("requestId" as never) as string | undefined) ?? "unknown";
+
     let full = "";
     try {
       for await (const chunk of source) {
@@ -260,9 +267,31 @@ aiRoutes.post("/chat", async (c) => {
       }
       stmts.insertMessage.run(randomUUID(), conversationId!, "assistant", full, Date.now());
       stmts.touchConversation.run(Date.now(), conversationId!);
+      // Track successful completions only — distinguishable from stream_error events.
+      track("chat", {
+        userId,
+        modeId: body.modeId,
+        meta: { grounding: !!body.grounding, provider: body.provider ?? "openrouter" },
+      });
       await stream.writeSSE({ event: "done", data: JSON.stringify({ conversationId }) });
     } catch (err) {
       const message = err instanceof Error ? err.message : "stream_error";
+      // Log server-side with full context before sending the client a safe error event.
+      log.error("SSE stream error", {
+        requestId,
+        conversationId,
+        model,
+        userId,
+        err: message,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      // Track stream failures separately so they are distinguishable from
+      // successful completions in the events table.
+      track("stream_error", {
+        userId,
+        modeId: body.modeId,
+        meta: { provider: body.provider ?? "openrouter" },
+      });
       await stream.writeSSE({ event: "error", data: JSON.stringify({ message }) });
     }
   });
