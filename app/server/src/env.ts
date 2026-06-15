@@ -9,8 +9,28 @@ function required(name: string, fallback?: string): string {
   return v;
 }
 
+/**
+ * Parse a numeric env var with fail-fast validation.
+ * - If the env var is unset (or empty), the default is returned as-is.
+ * - If the env var IS set but parses to a non-finite number (e.g. "4O"),
+ *   throws at boot rather than silently propagating NaN.
+ * - Optional `min` enforces a lower bound (also throws at boot).
+ */
+function num(name: string, defaultValue: number, opts: { min?: number } = {}): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return defaultValue;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(`Invalid numeric env var ${name}="${raw}": parsed as ${n}`);
+  }
+  if (opts.min !== undefined && n < opts.min) {
+    throw new Error(`Invalid numeric env var ${name}=${n}: must be >= ${opts.min}`);
+  }
+  return n;
+}
+
 export const env = {
-  port: Number(process.env.PORT ?? 8787),
+  port: num("PORT", 8787, { min: 1 }),
   // Dev fallback secret — MUST be overridden in production.
   jwtSecret: required("ARS_JWT_SECRET", "dev-insecure-secret-change-me"),
   // Shared OpenRouter key used to offer free AI to signed-up users.
@@ -22,10 +42,10 @@ export const env = {
   // CORS allowlist (comma-separated). "*" in dev.
   corsOrigins: (process.env.ARS_CORS_ORIGINS ?? "*").split(",").map((s) => s.trim()),
   // Free-tier daily message budget per user when using the shared key.
-  freeDailyMessages: Number(process.env.ARS_FREE_DAILY_MESSAGES ?? 40),
+  freeDailyMessages: num("ARS_FREE_DAILY_MESSAGES", 40, { min: 0 }),
   // Raised daily budget for active "supporter" subscribers. Never gates a core
   // feature — it only lifts the free ceiling (BYOK still bypasses quota entirely).
-  supporterDailyMessages: Number(process.env.ARS_SUPPORTER_DAILY_MESSAGES ?? 200),
+  supporterDailyMessages: num("ARS_SUPPORTER_DAILY_MESSAGES", 200, { min: 0 }),
   // Web app base used to build links in emails / OAuth redirects.
   webUrl: process.env.ARS_WEB_URL ?? process.env.ARS_PUBLIC_URL ?? "http://localhost:5173",
   // Public base of THIS server (for OAuth redirect URIs).
@@ -34,8 +54,8 @@ export const env = {
   // also meaningless when SMTP is unconfigured).
   requireEmailVerification: (process.env.ARS_REQUIRE_EMAIL_VERIFICATION ?? "false") === "true",
   // Edge abuse limits (per IP).
-  ipRateWindowMs: Number(process.env.ARS_IP_RATE_WINDOW_MS ?? 60_000),
-  ipRateMax: Number(process.env.ARS_IP_RATE_MAX ?? 120),
+  ipRateWindowMs: num("ARS_IP_RATE_WINDOW_MS", 60_000, { min: 1 }),
+  ipRateMax: num("ARS_IP_RATE_MAX", 120, { min: 1 }),
   // Trust X-Forwarded-For / X-Real-IP for the client IP. Enable ONLY when this
   // server sits behind a reverse proxy that sets these headers. When false
   // (default), the rate limiter keys on the real socket address, which a remote
@@ -43,23 +63,23 @@ export const env = {
   trustProxy: (process.env.ARS_TRUST_PROXY ?? "false") === "true",
   // Per-user limits on the auth-gated but quota-exempt scholarly endpoints
   // (/api/ai/search fans out to 3 external APIs; /api/ai/save writes rows).
-  searchRateMax: Number(process.env.ARS_SEARCH_RATE_MAX ?? 20),
-  searchRateWindowMs: Number(process.env.ARS_SEARCH_RATE_WINDOW_MS ?? 60_000),
-  saveRateMax: Number(process.env.ARS_SAVE_RATE_MAX ?? 60),
-  saveRateWindowMs: Number(process.env.ARS_SAVE_RATE_WINDOW_MS ?? 60_000),
+  searchRateMax: num("ARS_SEARCH_RATE_MAX", 20, { min: 1 }),
+  searchRateWindowMs: num("ARS_SEARCH_RATE_WINDOW_MS", 60_000, { min: 1 }),
+  saveRateMax: num("ARS_SAVE_RATE_MAX", 60, { min: 1 }),
+  saveRateWindowMs: num("ARS_SAVE_RATE_WINDOW_MS", 60_000, { min: 1 }),
   // Hard ceiling on the per-request scholarly result count (client-supplied).
-  searchLimitMax: Number(process.env.ARS_SEARCH_LIMIT_MAX ?? 25),
+  searchLimitMax: num("ARS_SEARCH_LIMIT_MAX", 25, { min: 1 }),
   // Aggregate upload-text budget per user (chars). Default 5 MB of text
   // (~5_000_000 chars). Overridable so operators can tighten or loosen the cap.
-  uploadBudgetChars: Number(process.env.ARS_UPLOAD_BUDGET_CHARS ?? 5_000_000),
+  uploadBudgetChars: num("ARS_UPLOAD_BUDGET_CHARS", 5_000_000, { min: 1 }),
   // How many days of analytics events to retain. Older rows are pruned on boot
   // (and at a recurring interval) to keep the events table bounded.
-  eventRetentionDays: Number(process.env.ARS_EVENT_RETENTION_DAYS ?? 90),
+  eventRetentionDays: num("ARS_EVENT_RETENTION_DAYS", 90, { min: 1 }),
   // Local model (Ollama) base, used when a request asks for provider "ollama".
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   smtp: {
     host: process.env.SMTP_HOST ?? "",
-    port: Number(process.env.SMTP_PORT ?? 587),
+    port: num("SMTP_PORT", 587, { min: 1 }),
     user: process.env.SMTP_USER ?? "",
     pass: process.env.SMTP_PASS ?? "",
     from: process.env.SMTP_FROM ?? "ARS Studio <noreply@arsstudio.app>",

@@ -36,6 +36,9 @@ jobs:
       - name: Build core
         run: pnpm --filter ./packages/core build
 
+      - name: Lint
+        run: pnpm -r lint
+
       - name: Typecheck
         run: pnpm -r typecheck
 
