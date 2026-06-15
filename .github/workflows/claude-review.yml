@@ -1,0 +1,50 @@
+name: Claude Review
+
+# Automatic code review on every PR. Claude reads the diff and posts review
+# comments (inline where it can) focused on correctness, security, and the
+# project's conventions. Advisory — it does not block merges.
+#
+# Setup: same as claude.yml (Claude GitHub App + ANTHROPIC_API_KEY secret).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  # One live review per PR; cancel the stale one when new commits land.
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so Claude can diff against the base
+
+      - name: Claude PR review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review the pull request #${{ github.event.pull_request.number }}.
+            Use `gh pr diff` to read the changes and `gh pr view` for context.
+            Focus, in priority order, on:
+              1. Correctness bugs and logic errors.
+              2. Security issues (authz, input validation, secrets, injection,
+                 rate-limit / quota bypass).
+              3. Missing error handling and edge cases.
+              4. Deviations from the conventions in CLAUDE.md and surrounding code.
+            Post concise inline review comments with `gh pr review` /
+            `gh api`. Skip pure style nits. If the PR looks good, say so briefly
+            with a one-line summary — do not invent problems.
+          claude_args: '--allowedTools "Bash(gh pr diff),Bash(gh pr view*),Bash(gh pr review*),Bash(gh api*),Bash(git diff*),Bash(git log*)"'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

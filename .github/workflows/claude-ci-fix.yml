@@ -1,0 +1,57 @@
+name: Claude CI Fix
+
+# When CI fails on a pull request, Claude pulls the failing logs, diagnoses the
+# break, pushes a fix commit to the PR branch, and comments what it changed.
+# Runs only for PR-triggered CI runs that concluded in failure.
+#
+# Setup: same as claude.yml (Claude GitHub App + ANTHROPIC_API_KEY secret).
+
+on:
+  workflow_run:
+    # Watch the project's CI workflows by name (see .github/workflows/*).
+    workflows: ["app-ci", "e2e", "Spec Consistency", "pytest"]
+    types: [completed]
+
+jobs:
+  ci-fix:
+    # Only act on genuine failures that originated from a pull request.
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read       # read the failed run's logs
+      id-token: write
+    steps:
+      - name: Check out the PR head
+        uses: actions/checkout@v4
+        with:
+          # Check out the branch that failed CI so fixes commit to the PR.
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Claude diagnose + fix
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            CI workflow "${{ github.event.workflow_run.name }}" failed on branch
+            "${{ github.event.workflow_run.head_branch }}"
+            (run id ${{ github.event.workflow_run.id }}).
+            Steps:
+              1. Read the failing logs:
+                 `gh run view ${{ github.event.workflow_run.id }} --log-failed`.
+              2. Reproduce locally where feasible (pnpm install, then the
+                 relevant build/test/typecheck command).
+              3. Make the SMALLEST change that fixes the actual failure. Do not
+                 refactor unrelated code or weaken/delete tests to make them pass.
+              4. Re-run the relevant command to confirm it now passes.
+              5. Commit to the current branch and push, then comment on the PR
+                 summarizing the root cause and the fix.
+            If the failure is environmental / flaky rather than a real code
+            defect, do NOT commit — comment your finding and stop.
+          claude_args: '--allowedTools "Bash(gh run view*),Bash(gh pr*),Bash(pnpm install),Bash(pnpm -r build),Bash(pnpm -r test),Bash(pnpm -r typecheck),Bash(pnpm --filter*),Bash(git*)"'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
