@@ -96,6 +96,31 @@ ensures the WAL file is fully flushed into the main DB file and the `-wal` /
 > or while the server is running — the copy may be inconsistent if unflushed WAL
 > frames exist. Use `VACUUM INTO` or Litestream instead.
 
+## Rate limiting — single-instance constraint
+
+The built-in in-memory rate limiter (`server/src/edge_ratelimit.ts`) is the
+sole brute-force guard on `/api/auth/*`, `/api/ai/*`, and `/api/metrics`.
+It works correctly for **single-instance** deployments but has two important
+limitations in production scale-out scenarios:
+
+1. **Counts reset on restart.** Every deploy/rollout briefly zeroes the
+   counter, giving a short unguarded window.
+2. **Horizontal scaling splits counts.** With N server replicas, each instance
+   sees only 1/N of the traffic, so an attacker effectively gets N× the
+   configured limit per IP before being blocked.
+
+**If you run more than one server instance** (Docker Swarm, k8s replicas,
+Fly.io multi-region, etc.) you must replace or supplement the in-process
+limiter with one of:
+
+- **Redis** — use `INCR` + `EXPIRE` (or the `rate-limiter-flexible` package)
+  against a shared Redis instance. All replicas share a single counter.
+- **Edge / WAF limiter** — Cloudflare Rate Limiting, AWS WAF, or
+  Fly.io Anycast rate limiting applied before requests reach this process.
+  The in-process Map then acts as a secondary defense only.
+
+Until a shared store is wired up, keep the server as a **single instance**.
+
 ## What the project owner must supply (cannot be automated here)
 1. Apple Developer + Google Play developer accounts.
 2. Code-signing certs / keystores (stored as CI secrets, never committed).

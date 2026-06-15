@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { MODES } from "@ars/core";
 import { env, hasSharedKey } from "./env.js";
 import { auth } from "./auth.js";
@@ -16,6 +17,18 @@ import { edgeRateLimit } from "./edge_ratelimit.js";
 import { summary } from "./analytics.js";
 import { db, stmts, closeDb } from "./db.js";
 import { log } from "./logger.js";
+
+/**
+ * Constant-time token comparison that is safe against both timing attacks and
+ * length-based short-circuits. We hash both sides with SHA-256 first so the
+ * buffers are always the same length, which satisfies `timingSafeEqual`'s
+ * same-length precondition without revealing information about the secret.
+ */
+function metricsTokenValid(provided: string, expected: string): boolean {
+  const a = createHash("sha256").update(provided).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 const app = new Hono();
 
@@ -61,9 +74,10 @@ app.onError((err, c) => {
   return c.json({ error: "internal_server_error", requestId }, 500);
 });
 
-// Per-IP abuse limiting on the mutable surfaces.
+// Per-IP abuse limiting on the mutable surfaces and the metrics endpoint.
 app.use("/api/auth/*", edgeRateLimit);
 app.use("/api/ai/*", edgeRateLimit);
+app.use("/api/metrics", edgeRateLimit);
 
 // Liveness: static, always fast. Kubernetes/Fly.io restarts the pod when this
 // returns non-2xx. It deliberately does NOT probe the DB — a slow DB read
@@ -114,10 +128,14 @@ app.get("/api/social-providers", (c) =>
 
 // Privacy-preserving aggregate metrics (counts only, no content). Gated by a
 // token so it isn't world-readable; disabled if ARS_METRICS_TOKEN is unset.
+// The token check uses a SHA-256-based constant-time comparison to avoid
+// leaking the expected token via timing side-channels or length short-circuits.
 app.get("/api/metrics", (c) => {
   const token = process.env.ARS_METRICS_TOKEN;
   if (!token) return c.json({ error: "disabled" }, 404);
-  if (c.req.header("Authorization") !== `Bearer ${token}`) return c.json({ error: "unauthorized" }, 401);
+  const authHeader = c.req.header("Authorization") ?? "";
+  const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (!metricsTokenValid(provided, token)) return c.json({ error: "unauthorized" }, 401);
   return c.json({ last24h: summary(24 * 60 * 60_000), last7d: summary(7 * 24 * 60 * 60_000) });
 });
 

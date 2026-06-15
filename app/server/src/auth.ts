@@ -7,6 +7,7 @@ import type { Context, Next } from "hono";
 import { db } from "./db.js";
 import { env } from "./env.js";
 import { sendMail, verificationEmail, resetEmail } from "./mail.js";
+import { log } from "./logger.js";
 import type { Env } from "./types.js";
 
 // --- legacy-compatible password hashing --------------------------------------
@@ -81,12 +82,22 @@ export const auth = betterAuth({
       verify: async ({ hash, password }) => legacyVerify(hash, password),
     },
     sendResetPassword: async ({ user, url }) => {
-      await sendMail({ to: user.email, ...resetEmail(url) }).catch(() => {});
+      await sendMail({ to: user.email, ...resetEmail(url) }).catch((err: unknown) => {
+        log.error("failed to send password-reset email", {
+          to: user.email,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
     },
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      await sendMail({ to: user.email, ...verificationEmail(url) }).catch(() => {});
+      await sendMail({ to: user.email, ...verificationEmail(url) }).catch((err: unknown) => {
+        log.error("failed to send verification email", {
+          to: user.email,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
     },
   },
   socialProviders: {

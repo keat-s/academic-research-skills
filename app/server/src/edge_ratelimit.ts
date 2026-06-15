@@ -3,8 +3,18 @@ import type { HttpBindings } from "@hono/node-server";
 import { env } from "./env.js";
 
 // In-memory fixed-window rate limit per client IP. Cheap abuse protection in
-// front of auth + AI routes. For multi-instance deployments, front this with a
-// shared store (Redis) or an edge/CDN limiter; this guards the single-node case.
+// front of auth + AI routes.
+//
+// SINGLE-INSTANCE ONLY: this Map lives in process memory, so:
+//   1. Counts reset to zero on every deploy/restart — a brief window of no
+//      limiting exists after each rollout.
+//   2. Horizontal scaling splits counts across pods; an attacker running N
+//      pods gets N× the effective limit, fully neutralizing the guard.
+//
+// For multi-instance or high-availability deployments you MUST replace this
+// with a shared atomic store (e.g. Redis INCR + EXPIRE) or delegate to an
+// edge/WAF rate limiter (Cloudflare, AWS WAF, Fly.io Anycast) before traffic
+// reaches this process. Until then, deploy as a single instance only.
 
 const buckets = new Map<string, { count: number; reset: number }>();
 
