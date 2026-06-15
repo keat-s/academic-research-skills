@@ -20,7 +20,9 @@ function clientIp(c: Context): string {
     if (real) return real.trim();
   }
   // Unspoofable: the real TCP peer address from the Node socket.
-  const socket = (c.env as HttpBindings).incoming?.socket;
+  // c.env is only populated by @hono/node-server; when app.fetch is called
+  // directly (e.g. in tests) it is undefined — fall back to "local" safely.
+  const socket = (c.env as HttpBindings | undefined)?.incoming?.socket;
   return socket?.remoteAddress ?? "local";
 }
 

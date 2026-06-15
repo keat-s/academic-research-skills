@@ -14,11 +14,11 @@ import type { Env } from "./types.js";
 // "<saltHex>:<hashHex>". We override better-auth's password hash/verify with the
 // exact same format so migrated users keep logging in (better-auth's default
 // scrypt params differ — without this every existing user is locked out).
-function legacyHash(pw: string): string {
+export function legacyHash(pw: string): string {
   const salt = randomBytes(16).toString("hex");
   return `${salt}:${scryptSync(pw, salt, 64).toString("hex")}`;
 }
-function legacyVerify(stored: string, pw: string): boolean {
+export function legacyVerify(stored: string, pw: string): boolean {
   const [salt, key] = stored.split(":");
   if (!salt || !key) return false;
   const derived = scryptSync(pw, salt, 64);

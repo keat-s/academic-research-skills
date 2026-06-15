@@ -91,9 +91,11 @@ app.route("/api/monetization", monetizeRoutes);
 app.route("/api/tips", tipRoutes);
 
 const port = env.port;
-serve({ fetch: app.fetch, port }, (info) => {
-  // eslint-disable-next-line no-console
-  console.log(`ARS Studio server on http://localhost:${info.port} (sharedKey=${hasSharedKey})`);
-});
+if (process.env.NODE_ENV !== "test") {
+  serve({ fetch: app.fetch, port }, (info) => {
+    // eslint-disable-next-line no-console
+    console.log(`ARS Studio server on http://localhost:${info.port} (sharedKey=${hasSharedKey})`);
+  });
+}
 
 export { app };
