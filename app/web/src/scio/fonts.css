@@ -1,0 +1,12 @@
+/* Scio webfonts — self-hosted via @fontsource (no runtime CDN request).
+   Privacy: bundled woff2, served from our own origin, works offline in the
+   PWA / Capacitor / Tauri shells. Replaces the prior Google Fonts CDN @import.
+   - Hanken Grotesk: variable weight (covers 400–800), roman only.
+   - Newsreader:     variable weight + italic (scholarly marginalia / quotes).
+   - IBM Plex Mono:  static 400/500/600 (citations, metadata, data). */
+@import '@fontsource-variable/hanken-grotesk/wght.css';
+@import '@fontsource-variable/newsreader/wght.css';
+@import '@fontsource-variable/newsreader/wght-italic.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';

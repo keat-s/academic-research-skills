@@ -1,0 +1,25 @@
+<svg width="320" height="200" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Evidence converging on a claim">
+  
+  <g stroke="#D4D4CE" stroke-width="1.5">
+    <line x1="58" y1="40" x2="180" y2="100"></line>
+    <line x1="46" y1="100" x2="180" y2="100"></line>
+    <line x1="58" y1="160" x2="180" y2="100"></line>
+    <line x1="104" y1="66" x2="180" y2="100"></line>
+    <line x1="104" y1="134" x2="180" y2="100"></line>
+  </g>
+  <g fill="#FFFFFF" stroke="#2C7A72" stroke-width="1.5">
+    <circle cx="58" cy="40" r="7"></circle>
+    <circle cx="46" cy="100" r="7"></circle>
+    <circle cx="58" cy="160" r="7"></circle>
+    <circle cx="104" cy="66" r="7"></circle>
+    <circle cx="104" cy="134" r="7"></circle>
+  </g>
+  
+  <circle cx="180" cy="100" r="13" fill="#2C7A72"></circle>
+  <circle cx="180" cy="100" r="4.5" fill="#FFFFFF"></circle>
+  
+  <rect x="214" y="82" width="86" height="36" rx="6" fill="#ECF5F3" stroke="#A9D2CB" stroke-width="1.5"></rect>
+  <line x1="226" y1="95" x2="288" y2="95" stroke="#2C7A72" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="226" y1="105" x2="272" y2="105" stroke="#79B8AF" stroke-width="2" stroke-linecap="round"></line>
+  <line x1="193" y1="100" x2="214" y2="100" stroke="#2C7A72" stroke-width="1.5"></line>
+</svg>

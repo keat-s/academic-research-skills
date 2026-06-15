@@ -1,4 +1,5 @@
 import { stmts } from "./db.js";
+import { log } from "./logger.js";
 
 // Privacy-preserving event logging. We never store message content, prompts,
 // or document text here — only coarse counters (what happened, which mode).
@@ -14,8 +15,12 @@ export function track(
       opts.meta ? JSON.stringify(opts.meta).slice(0, 500) : null,
       Date.now()
     );
-  } catch {
-    // Analytics must never break a request.
+  } catch (err) {
+    // Analytics must never break a request — log the failure and move on.
+    log.warn("analytics.track failed", {
+      event: name,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 

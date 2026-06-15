@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { stmts } from "./db.js";
 import { requireAuth } from "./auth.js";
 import { track } from "./analytics.js";
+import { env } from "./env.js";
 import type { Env } from "./types.js";
 
 // Document upload for review / revision / citation-check modes. We extract
@@ -48,6 +49,20 @@ uploadRoutes.post("/", async (c) => {
     return c.json({ error: "extract_failed" }, 422);
   }
   if (!text) return c.json({ error: "empty_document" }, 422);
+
+  // Enforce aggregate per-user upload byte budget. Check AFTER extraction so
+  // we know the actual char count for the new document. The budget default is
+  // ARS_UPLOAD_BUDGET_CHARS (default 5 000 000 chars ≈ 5 MB of text).
+  const { total } = stmts.sumUploadCharsByUser.get(userId) as { total: number };
+  if (total + text.length > env.uploadBudgetChars) {
+    return c.json(
+      {
+        error: "upload_budget_exceeded",
+        message: `Upload storage limit reached (${env.uploadBudgetChars.toLocaleString()} chars). Delete old documents first.`,
+      },
+      429
+    );
+  }
 
   const id = randomUUID();
   stmts.insertUpload.run(id, userId, file.name.slice(0, 200), file.type || "text/plain", text.length, text, Date.now());

@@ -96,32 +96,41 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  // Wrap the read loop in try/finally so the upstream socket is always
+  // released — even if the consumer exits early (e.g. AbortController fires
+  // or the SSE handler throws before draining the stream).
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const data = trimmed.slice(5).trim();
-      if (data === "[DONE]") {
-        yield { delta: "", done: true };
-        return;
-      }
-      try {
-        const parsed = JSON.parse(data) as {
-          choices?: Array<{ delta?: { content?: string } }>;
-        };
-        const delta = parsed.choices?.[0]?.delta?.content;
-        if (delta) yield { delta, done: false };
-      } catch {
-        // partial JSON across chunks — ignore; the buffer logic recombines.
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === "[DONE]") {
+          yield { delta: "", done: true };
+          return;
+        }
+        try {
+          const parsed = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+          };
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) yield { delta, done: false };
+        } catch {
+          // partial JSON across chunks — ignore; the buffer logic recombines.
+        }
       }
     }
+  } finally {
+    // cancel() signals the server to stop sending and releases the socket.
+    // Safe to call even if the stream is already exhausted or errored.
+    reader.cancel().catch(() => {});
   }
   yield { delta: "", done: true };
 }

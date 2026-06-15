@@ -1,11 +1,55 @@
-@import "@fontsource-variable/inter";
+/* Scio foundation (fonts + tokens) must precede the Tailwind layers so the
+   shadcn bridge variables below can reference Scio's semantic tokens. */
+@import "./scio/scio.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * shadcn/ui bridge variables, mapped to the Scio design system (light, warm-
+ * paper, muted-teal accent, scholarly ochre marks). Every shadcn primitive and
+ * the chat UX reads hsl(var(--…)) from here, so re-pointing these re-skins the
+ * whole app. Scio's own semantic tokens (--accent, --mark-bg, --font-mono,
+ * --surface-*, --shadow-*, …) come from scio/tokens and are used directly.
+ */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+
+  --background: 60 20% 98%; /* paper  #FBFBF9 (--n-25) */
+  --foreground: 60 4% 10%; /* ink    #1A1A18 (--n-900) */
+
+  --card: 0 0% 100%;
+  --card-foreground: 60 4% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 60 4% 10%;
+
+  --primary: 174 47% 33%; /* teal-500 #2C7A72 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 60 12% 96%; /* sunken  #F6F6F3 (--n-50) */
+  --secondary-foreground: 60 4% 10%;
+
+  --muted: 60 11% 93%; /* #EFEFEB (--n-100) */
+  --muted-foreground: 60 4% 39%; /* #66665F (--n-600) */
+  /* NOTE: shadcn's `accent` (hover-surface) is intentionally NOT bridged here —
+   * the name `--accent` is owned by Scio (solid teal). Tailwind's `accent`
+   * color maps directly to Scio's --accent-soft / --accent-text (see
+   * tailwind.config.js), so we don't clobber Scio's teal accent. */
+
+  --destructive: 5 53% 50%; /* red-500 #C0473D */
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 60 8% 88%; /* #E4E4DF (--n-200) */
+  --input: 60 8% 88%;
+  --ring: 174 47% 40%;
+
+  --radius: 0.75rem; /* Scio card radius (12px); controls derive 8–10px */
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
 html,
@@ -16,13 +60,9 @@ body,
 }
 
 body {
-  font-family: "Inter Variable", Inter, system-ui, sans-serif;
-  color: #e2e8f0;
-  background:
-    radial-gradient(1200px 600px at 85% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(139, 92, 246, 0.1), transparent 60%),
-    #0b1220;
-  background-attachment: fixed;
+  font-family: var(--font-sans);
+  color: var(--text-body);
+  background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
   /* iOS safe areas for the Capacitor build */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
@@ -30,20 +70,26 @@ body {
 }
 
 ::selection {
-  background: rgba(129, 140, 248, 0.35);
+  background: color-mix(in oklch, var(--teal-500) 22%, transparent);
+}
+
+/* Signature faint dotted grid for the hero / ink surfaces. */
+.scio-dotgrid-invert {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.06) 1px, transparent 0);
+  background-size: 26px 26px;
 }
 
 /* Slim, unobtrusive scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+  scrollbar-color: rgba(102, 102, 95, 0.28) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: rgba(102, 102, 95, 0.28);
   border-radius: 8px;
 }
 *::-webkit-scrollbar-track {
@@ -52,35 +98,73 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium
-      transition-all duration-150 focus-visible:outline-none focus-visible:ring-2
-      focus-visible:ring-indigo-400/60 active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 text-sm font-medium
+      transition-all duration-150 focus-visible:outline-none active:translate-y-px;
+    border-radius: var(--radius-md);
+    padding: 0.5rem 1rem;
+  }
+  .btn:focus-visible {
+    box-shadow: var(--ring-focus);
   }
   .btn-primary {
-    @apply btn text-white shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:shadow-none;
-    background-image: linear-gradient(135deg, #6366f1, #8b5cf6);
+    @apply btn text-white disabled:opacity-50;
+    background: var(--accent);
+    box-shadow: var(--shadow-xs);
   }
   .btn-primary:hover:not(:disabled) {
-    filter: brightness(1.12);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+    background: var(--accent-hover);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:active:not(:disabled) {
+    background: var(--accent-press);
   }
   .btn-ghost {
-    @apply btn border border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/10 disabled:opacity-40;
+    @apply btn disabled:opacity-40;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-body);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-sunken);
+    border-color: var(--border-strong);
   }
   .input {
-    @apply w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-slate-100
-      placeholder:text-slate-500 transition-colors focus:border-indigo-400/70 focus:bg-white/[0.07]
-      focus:outline-none focus:ring-1 focus:ring-indigo-400/40;
+    @apply w-full text-sm;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-strong);
+    border-radius: var(--radius-md);
+    padding: 0.625rem 0.875rem;
+    transition: var(--transition-control);
+  }
+  .input::placeholder {
+    color: var(--text-subtle);
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--ring-focus);
   }
   .card {
-    @apply rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-sm;
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider;
+    @apply inline-flex items-center gap-1 uppercase;
+    font-family: var(--font-meta);
+    font-size: 10px;
+    letter-spacing: var(--tracking-caps);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-soft);
+    color: var(--accent-text);
   }
 }
 
-/* Entry animations */
+/* Entry animations — quiet: short fade + small lift, reduced-motion aware. */
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -92,7 +176,12 @@ body {
   }
 }
 .animate-fade-up {
-  animation: fade-up 0.35s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+  animation: fade-up 0.32s var(--ease-out) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
 }
 
 @keyframes blink {
@@ -102,12 +191,52 @@ body {
 }
 .cursor-blink {
   animation: blink 1s steps(1) infinite;
+  color: var(--accent);
 }
 
-/* Markdown prose */
+/* Agent "reading the literature" thinking dots (from the Scio UI kit). */
+.scio-thinking-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.scio-thinking-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.4;
+  animation: scio-dot 1s var(--ease-in-out) infinite;
+}
+.scio-thinking-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.scio-thinking-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes scio-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scio-thinking-dots i {
+    animation: none;
+  }
+}
+
+/* Markdown prose — Scio reading surface. */
 .prose-ars {
-  line-height: 1.7;
+  line-height: var(--leading-relaxed);
   word-wrap: break-word;
+  color: var(--text-body);
 }
 .prose-ars > :first-child {
   margin-top: 0;
@@ -119,7 +248,9 @@ body {
 .prose-ars h2,
 .prose-ars h3,
 .prose-ars h4 {
-  @apply font-semibold text-slate-50 mt-5 mb-2;
+  @apply font-semibold mt-5 mb-2;
+  color: var(--text-strong);
+  letter-spacing: var(--tracking-snug);
 }
 .prose-ars h1 {
   @apply text-xl;
@@ -141,29 +272,61 @@ body {
   @apply list-decimal;
 }
 .prose-ars code {
-  @apply rounded-md bg-black/40 px-1.5 py-0.5 text-[0.85em] text-indigo-200;
+  font-family: var(--font-mono);
+  background: var(--surface-sunken);
+  color: var(--accent-text);
+  border-radius: var(--radius-xs);
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
 }
 .prose-ars pre {
-  @apply my-3 overflow-x-auto rounded-xl border border-white/10 bg-black/50 p-3.5 text-xs leading-relaxed;
+  @apply my-3 overflow-x-auto p-3.5 text-xs leading-relaxed;
+  font-family: var(--font-mono);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 .prose-ars pre code {
-  @apply bg-transparent p-0 text-slate-200;
+  background: transparent;
+  padding: 0;
+  color: var(--text-body);
 }
 .prose-ars a {
-  @apply text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 hover:decoration-indigo-300;
+  color: var(--text-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--text-link) 40%, transparent);
+  text-underline-offset: 2px;
 }
+.prose-ars a:hover {
+  text-decoration-color: var(--text-link);
+}
+/* Pull-quotes / synthesized claims render as scholarly serif marginalia. */
 .prose-ars blockquote {
-  @apply border-l-2 border-indigo-400/40 pl-3.5 italic text-slate-400 my-3;
+  @apply my-3 pl-3.5;
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--text-body);
+  border-left: 2px solid var(--accent);
+}
+.prose-ars mark {
+  background: var(--mark-bg);
+  color: var(--mark-text);
+  padding: 0 2px;
+  border-radius: 2px;
 }
 .prose-ars table {
   @apply my-3 w-full border-collapse text-sm;
 }
 .prose-ars th {
-  @apply border border-white/10 bg-white/5 px-2.5 py-1.5 text-left font-semibold;
+  @apply px-2.5 py-1.5 text-left font-semibold;
+  border: 1px solid var(--border-default);
+  background: var(--surface-sunken);
 }
 .prose-ars td {
-  @apply border border-white/10 px-2.5 py-1.5 text-left;
+  @apply px-2.5 py-1.5 text-left;
+  border: 1px solid var(--border-default);
 }
 .prose-ars hr {
-  @apply my-4 border-white/10;
+  @apply my-4;
+  border-color: var(--border-default);
 }

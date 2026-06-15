@@ -1,0 +1,91 @@
+/* ============================================================
+   SCIO · COLOR TOKENS
+   Muted teal accent · crisp paper neutrals · scholarly ochre
+   Base ramps first, semantic aliases at the bottom.
+   ============================================================ */
+:root {
+  /* --- Brand: Teal ("scio" signal) --------------------------- */
+  --teal-50:  #ECF5F3;
+  --teal-100: #D4E9E4;
+  --teal-200: #A9D2CB;
+  --teal-300: #79B8AF;
+  --teal-400: #4E9A8F;
+  --teal-500: #2C7A72;   /* primary */
+  --teal-600: #21655E;
+  --teal-700: #1A524C;
+  --teal-800: #15413D;
+  --teal-900: #102F2C;
+
+  /* --- Neutrals: warm paper → ink ---------------------------- */
+  --n-0:   #FFFFFF;
+  --n-25:  #FBFBF9;   /* page paper */
+  --n-50:  #F6F6F3;
+  --n-100: #EFEFEB;
+  --n-200: #E4E4DF;
+  --n-300: #D4D4CE;
+  --n-400: #B0B0A9;
+  --n-500: #8A8A83;
+  --n-600: #66665F;
+  --n-700: #4A4A45;
+  --n-800: #2D2D2A;
+  --n-900: #1A1A18;
+
+  /* --- Secondary accent: scholarly ochre (highlights / marks) - */
+  --ochre-50:  #F8F1DF;
+  --ochre-100: #F1E4C2;
+  --ochre-300: #DABA6B;
+  --ochre-500: #B98A3A;
+  --ochre-700: #8A6526;
+
+  /* --- Semantic hues ---------------------------------------- */
+  --green-500: #3F8F5B;  --green-50: #E8F2EB;
+  --amber-500: #BF8A2E;  --amber-50: #F8EFD9;
+  --red-500:   #C0473D;  --red-50:   #F8E7E4;
+  --blue-500:  #3A6EA5;  --blue-50:  #E7EDF5;
+
+  /* ============================================================
+     SEMANTIC ALIASES  — reference these in product UI
+     ============================================================ */
+  /* Text */
+  --text-strong:    var(--n-900);
+  --text-body:      var(--n-800);
+  --text-muted:     var(--n-600);
+  --text-subtle:    var(--n-500);
+  --text-on-accent: var(--n-0);
+  --text-link:      var(--teal-600);
+
+  /* Surfaces */
+  --surface-page:    var(--n-25);
+  --surface-card:    var(--n-0);
+  --surface-sunken:  var(--n-50);
+  --surface-raised:  var(--n-0);
+  --surface-inverse: var(--n-900);
+  --surface-accent-soft: var(--teal-50);
+
+  /* Borders */
+  --border-subtle:  var(--n-100);
+  --border-default: var(--n-200);
+  --border-strong:  var(--n-300);
+  --border-accent:  var(--teal-300);
+
+  /* Accent (interactive primary) */
+  --accent:        var(--teal-500);
+  --accent-hover:  var(--teal-600);
+  --accent-press:  var(--teal-700);
+  --accent-soft:   var(--teal-50);
+  --accent-soft-border: var(--teal-200);
+  --accent-text:   var(--teal-600);
+
+  /* Highlight / evidence marks */
+  --mark-bg:   var(--ochre-100);
+  --mark-text: var(--ochre-700);
+
+  /* Status */
+  --success: var(--green-500); --success-soft: var(--green-50);
+  --warning: var(--amber-500); --warning-soft: var(--amber-50);
+  --danger:  var(--red-500);   --danger-soft:  var(--red-50);
+  --info:    var(--blue-500);  --info-soft:    var(--blue-50);
+
+  /* Focus */
+  --focus-ring: color-mix(in oklch, var(--teal-500) 55%, transparent);
+}

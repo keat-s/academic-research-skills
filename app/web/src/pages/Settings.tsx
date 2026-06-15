@@ -1,10 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { api } from "../api";
+import { authClient } from "../lib/auth-client";
 import { useAuth } from "../auth";
 import { loadSettings, saveSettings } from "../settings";
 import { WEBLLM_MODELS, isWebGpuAvailable } from "../webllm";
 import type { ModelInfo } from "@ars/core";
+
+interface Sub {
+  plan: string;
+  status: string;
+  cancelAtPeriodEnd?: boolean;
+}
 
 export function Settings() {
   const { user, logout } = useAuth();
@@ -14,6 +22,9 @@ export function Settings() {
   const [localAvailable, setLocalAvailable] = useState(false);
   const [saved, setSaved] = useState(false);
   const [resent, setResent] = useState(false);
+  const [supporterEnabled, setSupporterEnabled] = useState(false);
+  const [subscription, setSubscription] = useState<Sub | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
   const webgpu = isWebGpuAvailable();
 
   useEffect(() => {
@@ -25,7 +36,52 @@ export function Settings() {
         setLocalAvailable(r.available);
       })
       .catch(() => {});
+    // Supporter tier is config-gated server-side (Stripe). Only show the card
+    // when the server advertises it, and reflect any existing subscription.
+    api
+      .health()
+      .then((h) => {
+        const enabled = !!(h as { features?: { supporter?: boolean } }).features?.supporter;
+        setSupporterEnabled(enabled);
+        if (enabled) refreshSubscription();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function refreshSubscription() {
+    try {
+      const { data } = await authClient.subscription.list();
+      const active = (data ?? []).find(
+        (s: Sub) => s.status === "active" || s.status === "trialing"
+      );
+      setSubscription(active ?? null);
+    } catch {
+      setSubscription(null);
+    }
+  }
+
+  async function becomeSupporter() {
+    setBillingBusy(true);
+    try {
+      await authClient.subscription.upgrade({
+        plan: "supporter",
+        successUrl: `${window.location.origin}/settings?supporter=success`,
+        cancelUrl: `${window.location.origin}/settings`,
+      });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
+  async function cancelSupporter() {
+    setBillingBusy(true);
+    try {
+      await authClient.subscription.cancel({ returnUrl: `${window.location.origin}/settings` });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
 
   function update(patch: Partial<typeof settings>) {
     const next = saveSettings(patch);
@@ -35,25 +91,39 @@ export function Settings() {
   }
 
   async function resend() {
-    await api.resendVerification().catch(() => {});
+    if (user?.email) {
+      await authClient
+        .sendVerificationEmail({ email: user.email, callbackURL: `${window.location.origin}/app` })
+        .catch(() => {});
+    }
     setResent(true);
   }
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
-      <Link to="/app" className="text-sm text-indigo-300 hover:underline">
-        ← Back to studio
+      <Link
+        to="/app"
+        className="inline-flex items-center gap-1.5 text-sm hover:underline"
+        style={{ color: "var(--text-link)" }}
+      >
+        <ArrowLeft size={14} strokeWidth={1.75} />
+        Back to studio
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-white">Settings</h1>
+      <h1 className="mt-4 text-2xl font-bold text-foreground">Settings</h1>
 
       <section className="card mt-6">
-        <div className="text-sm text-slate-400">Signed in as</div>
-        <div className="text-slate-100">{user?.email}</div>
+        <p
+          className="text-xs font-mono uppercase tracking-[0.08em]"
+          style={{ color: "var(--text-subtle)" }}
+        >
+          Signed in as
+        </p>
+        <div className="mt-0.5 text-foreground">{user?.email}</div>
         {user && user.emailVerified === false && (
-          <div className="mt-2 text-sm text-amber-300">
+          <div className="mt-2 text-sm" style={{ color: "var(--warning)" }}>
             Email not verified.{" "}
             {resent ? (
-              <span className="text-emerald-400">Verification sent.</span>
+              <span style={{ color: "var(--success)" }}>Verification sent.</span>
             ) : (
               <button className="underline" onClick={resend}>
                 Resend verification
@@ -66,8 +136,36 @@ export function Settings() {
         </button>
       </section>
 
+      {supporterEnabled && (
+        <section className="card mt-4 space-y-3">
+          <h2 className="font-semibold text-foreground">Supporter</h2>
+          <p className="text-sm text-muted-foreground">
+            ARS Studio is free and open under CC BY-NC — and stays that way. Becoming a supporter is
+            entirely optional: it never unlocks a core feature. It only raises your daily free
+            message limit and adds a small thank-you badge. You can stop any time.
+          </p>
+          {subscription ? (
+            <div className="space-y-2">
+              <p className="text-sm" style={{ color: "var(--success)" }}>
+                You're a supporter — thank you.{" "}
+                {subscription.cancelAtPeriodEnd && (
+                  <span style={{ color: "var(--warning)" }}>(ends at the period's close)</span>
+                )}
+              </p>
+              <button className="btn-ghost" onClick={cancelSupporter} disabled={billingBusy}>
+                {billingBusy ? "…" : "Manage or cancel"}
+              </button>
+            </div>
+          ) : (
+            <button className="btn-primary" onClick={becomeSupporter} disabled={billingBusy}>
+              {billingBusy ? "…" : "Become a supporter"}
+            </button>
+          )}
+        </section>
+      )}
+
       <section className="card mt-4 space-y-3">
-        <h2 className="font-semibold text-slate-200">Inference backend</h2>
+        <h2 className="font-semibold text-foreground">Inference backend</h2>
         <div className="grid grid-cols-3 gap-2">
           <button
             className={settings.provider === "openrouter" ? "btn-primary" : "btn-ghost"}
@@ -104,7 +202,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">Free open models, proxied through the server.</p>
+            <p className="text-xs text-muted-foreground">Free open models, proxied through the server.</p>
           </>
         )}
 
@@ -122,7 +220,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Runs entirely in your browser via WebGPU — fully private, no key, no limit. The model
               downloads once on first use (cached afterward); larger models need more GPU memory.
             </p>
@@ -143,7 +241,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Runs on your machine via Ollama — private, no key, no daily limit.
             </p>
           </>
@@ -153,8 +251,8 @@ export function Settings() {
       <section className="card mt-4 space-y-2">
         <label className="flex items-center justify-between">
           <div>
-            <div className="font-semibold text-slate-200">Citation grounding by default</div>
-            <div className="text-sm text-slate-400">
+            <div className="font-semibold text-foreground">Citation grounding by default</div>
+            <div className="mt-0.5 text-sm text-muted-foreground">
               Retrieve real sources (Crossref / OpenAlex / Semantic Scholar) before answering.
             </div>
           </div>
@@ -168,10 +266,16 @@ export function Settings() {
       </section>
 
       <section className="card mt-4 space-y-3">
-        <h2 className="font-semibold text-slate-200">Bring your own key (optional)</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="font-semibold text-foreground">Bring your own key (optional)</h2>
+        <p className="text-sm text-muted-foreground">
           Paste an{" "}
-          <a className="text-indigo-300 hover:underline" href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
+          <a
+            style={{ color: "var(--text-link)" }}
+            className="hover:underline"
+            href="https://openrouter.ai/keys"
+            target="_blank"
+            rel="noreferrer"
+          >
             OpenRouter API key
           </a>{" "}
           to skip the daily free limit and unlock paid models. Stored only in this browser; sent
@@ -191,7 +295,11 @@ export function Settings() {
         )}
       </section>
 
-      {saved && <p className="mt-3 text-sm text-emerald-400">Saved.</p>}
+      {saved && (
+        <p className="mt-3 text-sm" style={{ color: "var(--success)" }}>
+          Saved.
+        </p>
+      )}
     </div>
   );
 }

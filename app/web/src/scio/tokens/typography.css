@@ -1,0 +1,72 @@
+/* ============================================================
+   SCIO · TYPOGRAPHY TOKENS
+   Sans: Hanken Grotesk (UI + headings + body)
+   Serif: Newsreader (scholarly marginalia / pull quotes only)
+   Mono:  IBM Plex Mono (citations, metadata, evidence, data)
+   ============================================================ */
+:root {
+  --font-sans:  'Hanken Grotesk Variable', 'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Newsreader Variable', 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-mono:  'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Weights */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-extra:    800;
+
+  /* Type scale (1.200 minor-third-ish, tuned) */
+  --text-2xs: 11px;
+  --text-xs:  12px;
+  --text-sm:  13px;
+  --text-base:15px;
+  --text-md:  17px;
+  --text-lg:  20px;
+  --text-xl:  24px;
+  --text-2xl: 30px;
+  --text-3xl: 38px;
+  --text-4xl: 48px;
+  --text-5xl: 60px;
+  --text-6xl: 76px;
+
+  /* Line heights */
+  --leading-tight:   1.12;
+  --leading-snug:    1.28;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.02em;
+  --tracking-snug:   -0.01em;
+  --tracking-normal: 0em;
+  --tracking-wide:   0.04em;
+  --tracking-caps:   0.08em;
+
+  /* Semantic roles */
+  --font-display: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --font-body:    var(--font-sans);
+  --font-ui:      var(--font-sans);
+  --font-quote:   var(--font-serif);
+  --font-meta:    var(--font-mono);
+}
+
+/* ---- Specimen / utility helpers (safe to use in product) ---- */
+.scio-display {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extra);
+  font-size: var(--text-5xl);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text-strong);
+}
+.scio-h1 { font-family: var(--font-heading); font-weight: var(--weight-bold); font-size: var(--text-3xl); line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); color: var(--text-strong); }
+.scio-h2 { font-family: var(--font-heading); font-weight: var(--weight-bold); font-size: var(--text-2xl); line-height: var(--leading-snug); letter-spacing: var(--tracking-snug); color: var(--text-strong); }
+.scio-h3 { font-family: var(--font-heading); font-weight: var(--weight-semibold); font-size: var(--text-xl); line-height: var(--leading-snug); letter-spacing: var(--tracking-snug); color: var(--text-strong); }
+.scio-h4 { font-family: var(--font-heading); font-weight: var(--weight-semibold); font-size: var(--text-md); line-height: var(--leading-snug); color: var(--text-strong); }
+.scio-body { font-family: var(--font-body); font-weight: var(--weight-regular); font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--text-body); }
+.scio-small { font-family: var(--font-body); font-weight: var(--weight-regular); font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--text-muted); }
+.scio-quote { font-family: var(--font-quote); font-weight: var(--weight-regular); font-style: italic; font-size: var(--text-xl); line-height: var(--leading-snug); color: var(--text-body); }
+.scio-meta { font-family: var(--font-meta); font-weight: var(--weight-medium); font-size: var(--text-xs); letter-spacing: var(--tracking-snug); color: var(--text-muted); }
+.scio-eyebrow { font-family: var(--font-meta); font-weight: var(--weight-medium); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--text-subtle); }

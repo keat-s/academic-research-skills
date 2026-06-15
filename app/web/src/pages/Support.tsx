@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Heart, Coffee, Gift, Key, Link2, Building2, type LucideIcon } from "lucide-react";
 import { api, type MonetizationConfig } from "../api";
 
 interface TipsConfig {
@@ -31,7 +32,7 @@ function TipJar({ tips }: { tips: TipsConfig }) {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-muted-foreground">
         A tip buys nothing — no features unlock, no limits change. It just helps keep the free
         models and servers running.
       </p>
@@ -66,8 +67,10 @@ function TipJar({ tips }: { tips: TipsConfig }) {
               </button>
             </div>
           </div>
-          {error && <p className="text-sm text-rose-400">{error}</p>}
-          <p className="text-[11px] text-slate-600">Secure checkout via Stripe. No account data shared.</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <p className="text-[11px]" style={{ color: "var(--text-subtle)" }}>
+            Secure checkout via Stripe. No account data shared.
+          </p>
         </>
       ) : (
         tips.paymentLink && (
@@ -93,37 +96,48 @@ export function Support() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10 animate-fade-up">
-      <Link to="/app" className="text-sm text-indigo-300 hover:underline">
-        ← Back to studio
+      <Link
+        to="/app"
+        className="inline-flex items-center gap-1.5 text-sm hover:underline"
+        style={{ color: "var(--text-link)" }}
+      >
+        <ArrowLeft size={14} strokeWidth={1.75} />
+        Back to studio
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-white">Support ARS Studio</h1>
-      <p className="mt-2 text-slate-400">
+      <h1 className="mt-4 text-2xl font-bold text-foreground">Support ARS Studio</h1>
+      <p className="mt-2 text-muted-foreground">
         The app and its AI features are free, and always will be. The content this is built on is
         licensed CC BY-NC 4.0 — so there are no paid tiers or feature paywalls. If it saves you
         time, here are voluntary ways to keep it running.
       </p>
 
       {tipState === "success" && (
-        <div className="card mt-5 border-emerald-400/40 text-emerald-300">
-          💚 Thank you! Your tip keeps this free for everyone.
+        <div
+          className="card mt-5"
+          style={{
+            borderColor: "var(--success)",
+            color: "var(--success)",
+          }}
+        >
+          Thank you. Your tip keeps this free for everyone.
         </div>
       )}
       {tipState === "cancelled" && (
-        <div className="card mt-5 text-slate-400">No worries — the app stays free either way.</div>
+        <div className="card mt-5 text-muted-foreground">No worries — the app stays free either way.</div>
       )}
 
-      {!cfg && <p className="mt-6 text-slate-500">Loading…</p>}
+      {!cfg && <p className="mt-6 text-muted-foreground">Loading…</p>}
 
       {cfg && (
         <div className="mt-8 space-y-6">
           {tips?.enabled && (
-            <Section title="💜 Leave a tip">
+            <Section title="Leave a tip" Icon={Heart}>
               <TipJar tips={tips} />
             </Section>
           )}
 
           {cfg.donations.length > 0 && (
-            <Section title="☕ Donate">
+            <Section title="Donate" Icon={Coffee}>
               <div className="flex flex-wrap gap-2">
                 {cfg.donations.map((d) => (
                   <a key={d.label} className="btn-primary" href={d.url} target="_blank" rel="noreferrer">
@@ -135,20 +149,26 @@ export function Support() {
           )}
 
           {cfg.sponsorTiers.length > 0 && (
-            <Section title="💛 Sponsor">
+            <Section title="Sponsor" Icon={Gift}>
               <div className="grid gap-3 sm:grid-cols-2">
                 {cfg.sponsorTiers.map((s) => (
-                  <a key={s.name} className="card hover:border-indigo-400" href={s.url} target="_blank" rel="noreferrer">
-                    <div className="font-semibold text-slate-100">{s.name}</div>
-                    <div className="text-sm text-slate-400">{s.blurb}</div>
+                  <a
+                    key={s.name}
+                    className="card hover:border-primary transition-colors"
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <div className="font-semibold text-foreground">{s.name}</div>
+                    <div className="text-sm text-muted-foreground">{s.blurb}</div>
                   </a>
                 ))}
               </div>
             </Section>
           )}
 
-          <Section title="🔑 Bring your own key">
-            <p className="text-sm text-slate-400">
+          <Section title="Bring your own key" Icon={Key}>
+            <p className="text-sm text-muted-foreground">
               Add your own OpenRouter key to skip the daily free limit and pick premium models. You
               pay your provider directly — nothing flows through us.
             </p>
@@ -158,14 +178,20 @@ export function Support() {
           </Section>
 
           {cfg.affiliates.length > 0 && (
-            <Section title="🔗 Tools we like">
+            <Section title="Tools we use" Icon={Link2}>
               <ul className="space-y-2">
                 {cfg.affiliates.map((a) => (
                   <li key={a.label} className="text-sm">
-                    <a className="text-indigo-300 hover:underline" href={a.url} target="_blank" rel="noreferrer">
+                    <a
+                      style={{ color: "var(--text-link)" }}
+                      className="hover:underline"
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {a.label}
                     </a>
-                    <span className="ml-2 text-slate-500">{a.note}</span>
+                    <span className="ml-2 text-muted-foreground">{a.note}</span>
                   </li>
                 ))}
               </ul>
@@ -173,9 +199,16 @@ export function Support() {
           )}
 
           {cfg.grants.length > 0 && (
-            <Section title="🏛️ Institutional & grant funding">
+            <Section title="Institutional and grant funding" Icon={Building2}>
               {cfg.grants.map((g) => (
-                <a key={g.label} className="text-indigo-300 hover:underline" href={g.url} target="_blank" rel="noreferrer">
+                <a
+                  key={g.label}
+                  style={{ color: "var(--text-link)" }}
+                  className="hover:underline"
+                  href={g.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {g.label}
                 </a>
               ))}
@@ -187,10 +220,21 @@ export function Support() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  Icon,
+  children,
+}: {
+  title: string;
+  Icon: LucideIcon;
+  children: React.ReactNode;
+}) {
   return (
     <section>
-      <h2 className="mb-2 font-semibold text-slate-200">{title}</h2>
+      <h2 className="mb-3 flex items-center gap-2 font-semibold text-foreground">
+        <Icon size={16} strokeWidth={1.75} style={{ color: "var(--accent)" }} />
+        {title}
+      </h2>
       {children}
     </section>
   );

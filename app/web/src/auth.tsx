@@ -1,62 +1,52 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, setToken, getToken, type PublicUser } from "./api";
+import { createContext, useContext, type ReactNode } from "react";
+import { authClient } from "./lib/auth-client";
+import { setToken, type PublicUser } from "./api";
+
+// Auth is now backed by better-auth (bearer mode). This context is a thin
+// adapter over `authClient.useSession()` that maps a better-auth user onto the
+// existing `PublicUser` shape (displayName ← user.name) so downstream components
+// (App, Studio, Settings) stay untouched.
 
 interface AuthState {
   user: PublicUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName?: string) => Promise<void>;
-  setSession: (token: string, user: PublicUser) => void;
+  /** Re-fetch the session (better-auth keeps it reactive; this forces a refetch). */
   refresh: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function toPublicUser(u: {
+  id: string;
+  email: string;
+  name?: string | null;
+  emailVerified?: boolean;
+}): PublicUser {
+  return {
+    id: u.id,
+    email: u.email,
+    displayName: u.name ?? null,
+    emailVerified: u.emailVerified,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<PublicUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: session, isPending, refetch } = authClient.useSession();
+  const user = session?.user ? toPublicUser(session.user) : null;
 
-  useEffect(() => {
-    if (!getToken()) {
-      setLoading(false);
-      return;
-    }
-    api
-      .me()
-      .then(setUser)
-      .catch(() => setToken(null))
-      .finally(() => setLoading(false));
-  }, []);
-
-  async function login(email: string, password: string) {
-    const { token, user } = await api.login(email, password);
-    setToken(token);
-    setUser(user);
-  }
-  async function signup(email: string, password: string, displayName?: string) {
-    const { token, user } = await api.signup(email, password, displayName);
-    setToken(token);
-    setUser(user);
-  }
-  function setSession(token: string, u: PublicUser) {
-    setToken(token);
-    setUser(u);
-  }
   async function refresh() {
-    try {
-      setUser(await api.me());
-    } catch {
-      /* keep current */
-    }
+    await refetch();
   }
-  function logout() {
-    setToken(null);
-    setUser(null);
+
+  async function logout() {
+    await authClient.signOut().catch(() => {});
+    setToken(null); // clear the bearer token (localStorage["ars_token"])
+    await refetch();
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, setSession, refresh, logout }}>
+    <AuthContext.Provider value={{ user, loading: isPending, refresh, logout }}>
       {children}
     </AuthContext.Provider>
   );

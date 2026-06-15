@@ -9,18 +9,95 @@ export const db = new Database(env.sqlitePath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
+// --- better-auth owned tables -------------------------------------------------
+// better-auth owns user/account/session/verification (+ subscription via the
+// stripe plugin). We pin the generated schema here as idempotent
+// CREATE TABLE IF NOT EXISTS so a fresh DB (or a shared dev DB) boots without a
+// separate CLI migrate step. The shapes mirror `@better-auth/cli generate` for
+// the better-sqlite3 adapter + bearer + stripe plugins (better-auth 1.6.x).
+//   - timestamps are stored as INTEGER ms (the adapter's timestamp_ms mode).
+//   - `user.stripeCustomerId` is added by the stripe plugin.
+//   - `subscription` is added by the stripe plugin.
 db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  email         TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  display_name  TEXT,
-  created_at    INTEGER NOT NULL
+CREATE TABLE IF NOT EXISTS user (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL DEFAULT '',
+  email           TEXT NOT NULL UNIQUE,
+  emailVerified   INTEGER NOT NULL DEFAULT 0,
+  image           TEXT,
+  createdAt       INTEGER NOT NULL,
+  updatedAt       INTEGER NOT NULL,
+  stripeCustomerId TEXT
 );
 
+CREATE TABLE IF NOT EXISTS session (
+  id        TEXT PRIMARY KEY,
+  expiresAt INTEGER NOT NULL,
+  token     TEXT NOT NULL UNIQUE,
+  createdAt INTEGER NOT NULL,
+  updatedAt INTEGER NOT NULL,
+  ipAddress TEXT,
+  userAgent TEXT,
+  userId    TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS session_userId_idx ON session(userId);
+
+CREATE TABLE IF NOT EXISTS account (
+  id                    TEXT PRIMARY KEY,
+  accountId             TEXT NOT NULL,
+  providerId            TEXT NOT NULL,
+  userId                TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  accessToken           TEXT,
+  refreshToken          TEXT,
+  idToken               TEXT,
+  accessTokenExpiresAt  INTEGER,
+  refreshTokenExpiresAt INTEGER,
+  scope                 TEXT,
+  password              TEXT,
+  createdAt             INTEGER NOT NULL,
+  updatedAt             INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS account_userId_idx ON account(userId);
+
+CREATE TABLE IF NOT EXISTS verification (
+  id         TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value      TEXT NOT NULL,
+  expiresAt  INTEGER NOT NULL,
+  createdAt  INTEGER NOT NULL,
+  updatedAt  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS verification_identifier_idx ON verification(identifier);
+
+CREATE TABLE IF NOT EXISTS subscription (
+  id                   TEXT PRIMARY KEY,
+  plan                 TEXT NOT NULL,
+  referenceId          TEXT NOT NULL,
+  stripeCustomerId     TEXT,
+  stripeSubscriptionId TEXT,
+  status               TEXT NOT NULL DEFAULT 'incomplete',
+  periodStart          INTEGER,
+  periodEnd            INTEGER,
+  cancelAtPeriodEnd    INTEGER,
+  cancelAt             INTEGER,
+  canceledAt           INTEGER,
+  endedAt              INTEGER,
+  seats                INTEGER,
+  trialStart           INTEGER,
+  trialEnd             INTEGER,
+  billingInterval      TEXT,
+  stripeScheduleId     TEXT
+);
+CREATE INDEX IF NOT EXISTS subscription_referenceId_idx ON subscription(referenceId);
+`);
+
+// --- domain tables ------------------------------------------------------------
+// FKs point at better-auth's `user(id)`. Migrated user ids are preserved, so
+// existing rows stay valid. `events` keeps a free-form (nullable) user_id.
+db.exec(`
 CREATE TABLE IF NOT EXISTS conversations (
   id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
   mode_id    TEXT NOT NULL,
   title      TEXT NOT NULL,
   created_at INTEGER NOT NULL,
@@ -37,27 +114,10 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- Per-user, per-UTC-day counter for the shared-key free tier.
 CREATE TABLE IF NOT EXISTS usage_daily (
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
   day     TEXT NOT NULL,         -- YYYY-MM-DD (UTC)
   count   INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, day)
-);
-
--- Single-use tokens for email verification + password reset.
-CREATE TABLE IF NOT EXISTS auth_tokens (
-  token      TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind       TEXT NOT NULL,          -- 'verify' | 'reset'
-  expires_at INTEGER NOT NULL
-);
-
--- Linked OAuth identities.
-CREATE TABLE IF NOT EXISTS oauth_accounts (
-  provider         TEXT NOT NULL,    -- 'google' | 'github'
-  provider_user_id TEXT NOT NULL,
-  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at       INTEGER NOT NULL,
-  PRIMARY KEY (provider, provider_user_id)
 );
 
 -- Privacy-preserving usage events (no message content, no PII).
@@ -73,7 +133,7 @@ CREATE TABLE IF NOT EXISTS events (
 -- Uploaded documents (extracted text only; originals are not retained).
 CREATE TABLE IF NOT EXISTS uploads (
   id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
   filename   TEXT NOT NULL,
   mime       TEXT NOT NULL,
   chars      INTEGER NOT NULL,
@@ -83,22 +143,26 @@ CREATE TABLE IF NOT EXISTS uploads (
 
 CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_tokens_user ON auth_tokens(user_id, kind);
 CREATE INDEX IF NOT EXISTS idx_events_name ON events(name, created_at);
 CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id, created_at DESC);
 `);
 
-// Lightweight additive migration: add columns introduced after the initial
-// schema. Guarded so re-running is a no-op.
-function ensureColumn(table: string, column: string, ddl: string) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-  if (!cols.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
-  }
+// --- legacy (pre-better-auth) tables ------------------------------------------
+// These hold the old custom-JWT auth data. They are NOT created on a fresh DB;
+// they only exist on a DB that predates the big-bang migration. `migrate_to_
+// better_auth.ts` copies their rows into better-auth's user/account tables and
+// then drops them. The prepared statements below are kept solely so the
+// migration script can read legacy rows; nothing else references them.
+function tableExists(name: string): boolean {
+  return !!db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+    .get(name);
 }
-ensureColumn("users", "email_verified", "email_verified INTEGER NOT NULL DEFAULT 0");
 
-export interface UserRow {
+const hasLegacyUsers = tableExists("users");
+const hasLegacyOauth = tableExists("oauth_accounts");
+
+export interface LegacyUserRow {
   id: string;
   email: string;
   password_hash: string;
@@ -107,13 +171,42 @@ export interface UserRow {
   email_verified?: number;
 }
 
-export const stmts = {
-  insertUser: db.prepare(
-    "INSERT INTO users (id, email, password_hash, display_name, created_at) VALUES (?, ?, ?, ?, ?)"
-  ),
-  userByEmail: db.prepare("SELECT * FROM users WHERE email = ?"),
-  userById: db.prepare("SELECT * FROM users WHERE id = ?"),
+export interface LegacyOauthRow {
+  provider: string;
+  provider_user_id: string;
+  user_id: string;
+  created_at: number;
+}
 
+export const legacyStmts = {
+  hasLegacyUsers,
+  hasLegacyOauth,
+  allUsers: hasLegacyUsers
+    ? db.prepare("SELECT * FROM users")
+    : null,
+  allOauth: hasLegacyOauth
+    ? db.prepare("SELECT * FROM oauth_accounts")
+    : null,
+};
+
+// --- clean shutdown helper ---------------------------------------------------
+// Called by the SIGTERM/SIGINT handler in index.ts to flush the WAL and close
+// gracefully before the process exits. Safe to call multiple times (SQLite's
+// close is idempotent on an already-closed handle; we guard with a flag).
+let _closed = false;
+export function closeDb(): void {
+  if (_closed) return;
+  _closed = true;
+  try {
+    // Checkpoint the WAL into the main DB file so nothing is left in -wal.
+    db.pragma("wal_checkpoint(TRUNCATE)");
+  } finally {
+    db.close();
+  }
+}
+
+// --- domain prepared statements ----------------------------------------------
+export const stmts = {
   insertConversation: db.prepare(
     "INSERT INTO conversations (id, user_id, mode_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
   ),
@@ -127,8 +220,11 @@ export const stmts = {
   insertMessage: db.prepare(
     "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)"
   ),
+  // Returns the most recent N messages in chronological order. N=500 is a
+  // generous cap; conversations beyond that size are extremely rare in practice
+  // and the cap prevents unbounded memory/network usage on the GET handler.
   messagesByConversation: db.prepare(
-    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at"
+    "SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 500) ORDER BY created_at"
   ),
   // k-th user message (1-based) of a conversation — anchor for truncation.
   kthUserMessageAt: db.prepare(
@@ -139,26 +235,25 @@ export const stmts = {
   ),
 
   getUsage: db.prepare("SELECT count FROM usage_daily WHERE user_id = ? AND day = ?"),
-  upsertUsage: db.prepare(`
+  // Atomic gated consume: increments only while strictly under the limit.
+  // First message of the day inserts count=1; subsequent ones increment only
+  // when the existing count is below :limit. `changes` is 1 iff a unit was
+  // consumed, 0 when the limit is reached — no read-then-write race.
+  consumeIfUnder: db.prepare(`
     INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1)
     ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1
+      WHERE usage_daily.count < ?
   `),
 
-  setEmailVerified: db.prepare("UPDATE users SET email_verified = 1 WHERE id = ?"),
-  setPassword: db.prepare("UPDATE users SET password_hash = ? WHERE id = ?"),
-
-  insertToken: db.prepare(
-    "INSERT INTO auth_tokens (token, user_id, kind, expires_at) VALUES (?, ?, ?, ?)"
+  // Active "supporter" subscription lookup (drives the raised free quota).
+  activeSubscription: db.prepare(
+    "SELECT 1 FROM subscription WHERE referenceId = ? AND plan = ? AND status IN ('active','trialing') LIMIT 1"
   ),
-  getToken: db.prepare("SELECT * FROM auth_tokens WHERE token = ? AND kind = ?"),
-  deleteToken: db.prepare("DELETE FROM auth_tokens WHERE token = ?"),
-  deleteUserTokens: db.prepare("DELETE FROM auth_tokens WHERE user_id = ? AND kind = ?"),
 
-  oauthAccount: db.prepare(
-    "SELECT * FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?"
-  ),
-  insertOauthAccount: db.prepare(
-    "INSERT INTO oauth_accounts (provider, provider_user_id, user_id, created_at) VALUES (?, ?, ?, ?)"
+  // Refund one shared-key unit consumed by a failed stream. Uses MAX(0, ...)
+  // to guard against going negative if the row was somehow already pruned.
+  refundUsage: db.prepare(
+    "UPDATE usage_daily SET count = MAX(0, count - 1) WHERE user_id = ? AND day = ?"
   ),
 
   insertEvent: db.prepare(
@@ -175,13 +270,12 @@ export const stmts = {
     "SELECT id, filename, mime, chars, created_at FROM uploads WHERE user_id = ? ORDER BY created_at DESC LIMIT 50"
   ),
   countUploadsByUser: db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE user_id = ?"),
+  // Aggregate char count across all uploads for a user — used for the per-user
+  // upload byte budget check before accepting a new document.
+  sumUploadCharsByUser: db.prepare("SELECT COALESCE(SUM(chars), 0) AS total FROM uploads WHERE user_id = ?"),
+  // Delete analytics events older than a given epoch timestamp (ms). Called on
+  // boot and on a recurring interval (outside tests) to keep the table bounded.
+  pruneEvents: db.prepare("DELETE FROM events WHERE created_at < ?"),
   uploadById: db.prepare("SELECT * FROM uploads WHERE id = ? AND user_id = ?"),
   deleteUpload: db.prepare("DELETE FROM uploads WHERE id = ? AND user_id = ?"),
 };
-
-export interface TokenRow {
-  token: string;
-  user_id: string;
-  kind: string;
-  expires_at: number;
-}

@@ -8,6 +8,7 @@ import {
   listOllamaModels,
   fetchFreeModels,
   searchScholarly,
+  buildUploadBlock,
   DEFAULT_FREE_MODELS,
   DEFAULT_MODEL,
   type ChatMessage,
@@ -15,10 +16,11 @@ import {
 import { env, hasSharedKey } from "./env.js";
 import { stmts } from "./db.js";
 import { requireAuth } from "./auth.js";
-import { consume, getQuota } from "./ratelimit.js";
+import { consume, refund, getQuota, allowAction } from "./ratelimit.js";
 import { ground } from "./grounding.js";
 import { loadUploadTexts } from "./uploads.js";
 import { track } from "./analytics.js";
+import { log } from "./logger.js";
 import type { Env } from "./types.js";
 
 export const aiRoutes = new Hono<Env>();
@@ -49,10 +51,19 @@ aiRoutes.get("/local-models", async (c) => {
 // Scholarly retrieval only (no LLM, no quota). Powers citation grounding for
 // the in-browser WebLLM path, where generation happens client-side.
 aiRoutes.post("/search", async (c) => {
+  const userId = c.get("userId") as string;
+  if (!allowAction(`search:${userId}`, env.searchRateMax, env.searchRateWindowMs)) {
+    c.header("Retry-After", String(Math.ceil(env.searchRateWindowMs / 1000)));
+    return c.json({ error: "rate_limited", message: "Too many searches. Slow down." }, 429);
+  }
   const body = await c.req.json().catch(() => ({}));
   const query = String(body.query ?? "").trim();
   if (!query) return c.json({ sources: [] });
-  const sources = await searchScholarly(query.slice(0, 300), { limit: Number(body.limit ?? 6) });
+  // Clamp the client-supplied result count: it drives a 3-provider external
+  // fan-out, so an unbounded value is an amplification vector.
+  const reqLimit = Number(body.limit);
+  const limit = Math.min(env.searchLimitMax, Math.max(1, Number.isFinite(reqLimit) ? reqLimit : 6));
+  const sources = await searchScholarly(query.slice(0, 300), { limit });
   return c.json({ sources });
 });
 
@@ -60,6 +71,10 @@ aiRoutes.post("/search", async (c) => {
 // user's own device did the inference.
 aiRoutes.post("/save", async (c) => {
   const userId = c.get("userId") as string;
+  if (!allowAction(`save:${userId}`, env.saveRateMax, env.saveRateWindowMs)) {
+    c.header("Retry-After", String(Math.ceil(env.saveRateWindowMs / 1000)));
+    return c.json({ error: "rate_limited", message: "Too many writes. Slow down." }, 429);
+  }
   const body = (await c.req.json().catch(() => null)) as
     | { conversationId?: string; modeId: string; userText: string; assistantText: string }
     | null;
@@ -105,6 +120,11 @@ aiRoutes.get("/conversations/:id", (c) => {
 
 // Truncate a conversation at its k-th user message (1-based): that message and
 // everything after it are deleted. Powers edit-and-resend and regenerate.
+//
+// k-th user-turn truncation contract (server side; canonical doc in web/src/useChat.ts):
+// `fromUserTurn` is a 1-based index over stored role="user" rows only.
+// kthUserMessageAt uses a 0-based SQL OFFSET (k-1) to find the anchor row's
+// created_at, then deleteMessagesFrom removes that row and all later rows.
 aiRoutes.post("/conversations/:id/truncate", async (c) => {
   const userId = c.get("userId") as string;
   const id = c.req.param("id");
@@ -161,6 +181,9 @@ aiRoutes.post("/chat", async (c) => {
   const apiKey = usingByok ? body.apiKey! : env.openrouterKey;
 
   // Local (Ollama) inference is the user's own compute — no key, no quota.
+  // Track whether we actually consumed a shared-key unit so the catch block
+  // can refund it on upstream failure (BYOK / Ollama never consume quota).
+  let quotaConsumed = false;
   if (!usingLocal && !usingByok) {
     if (!hasSharedKey) {
       return c.json({ error: "no_shared_key", message: "Add your own OpenRouter key to chat." }, 402);
@@ -171,22 +194,27 @@ aiRoutes.post("/chat", async (c) => {
         429
       );
     }
+    quotaConsumed = true;
   }
-  track("chat", { userId, modeId: body.modeId, meta: { grounding: !!body.grounding, provider: body.provider ?? "openrouter" } });
+  // NOTE: track("chat") is emitted inside the stream handler on success or
+  // failure — not here — so a failed generation is distinguishable from a
+  // completed one in the analytics events table.
 
   const model = body.model || DEFAULT_MODEL;
   const messages: ChatMessage[] = [{ role: "system", content: system }, ...body.messages];
 
   // Attach extracted text from uploaded documents (kept server-side).
+  // TRUST BOUNDARY: upload text is user-controlled and is injected verbatim
+  // into the system prompt. It must never be parsed as instructions by the
+  // server — it is treated as opaque data passed to the model, which must
+  // apply its own refusal/safety policy. No server-side content filtering is
+  // applied here (behavior change deferred; comment only per P2.6 spec).
   if (Array.isArray(body.uploadIds) && body.uploadIds.length > 0) {
     const docs = loadUploadTexts(userId, body.uploadIds);
     if (docs.length > 0) {
-      const block = docs
-        .map((d) => `--- DOCUMENT: ${d.filename} ---\n${d.text}`)
-        .join("\n\n");
       messages.splice(1, 0, {
         role: "system",
-        content: `The user attached the following document(s). Use them as the primary material:\n\n${block}`,
+        content: buildUploadBlock(docs.map((d) => `--- DOCUMENT: ${d.filename} ---\n${d.text}`)),
       });
     }
   }
@@ -236,6 +264,10 @@ aiRoutes.post("/chat", async (c) => {
             ac.signal
           );
 
+    // Capture the request id for correlation in error logs. The middleware
+    // stores it on the context; fall back gracefully if somehow absent.
+    const requestId = (c.get("requestId" as never) as string | undefined) ?? "unknown";
+
     let full = "";
     try {
       for await (const chunk of source) {
@@ -247,9 +279,45 @@ aiRoutes.post("/chat", async (c) => {
       }
       stmts.insertMessage.run(randomUUID(), conversationId!, "assistant", full, Date.now());
       stmts.touchConversation.run(Date.now(), conversationId!);
+      // Track successful completions only — distinguishable from stream_error events.
+      track("chat", {
+        userId,
+        modeId: body.modeId,
+        meta: { grounding: !!body.grounding, provider: body.provider ?? "openrouter" },
+      });
       await stream.writeSSE({ event: "done", data: JSON.stringify({ conversationId }) });
     } catch (err) {
       const message = err instanceof Error ? err.message : "stream_error";
+      // Log server-side with full context before sending the client a safe error event.
+      log.error("SSE stream error", {
+        requestId,
+        conversationId,
+        model,
+        userId,
+        err: message,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      // Refund the quota unit when the provider returned zero output — the user
+      // got nothing and should not be charged a free turn. Only refund when we
+      // actually consumed a unit (not BYOK / Ollama paths).
+      if (quotaConsumed && full === "") {
+        refund(userId);
+        log.info("quota refunded after zero-output stream error", { requestId, conversationId, userId });
+      }
+      // A user turn was persisted before streaming. If the stream produced zero
+      // output the conversation has a dangling user message with no reply.
+      // Log it for observability; cleaning it up is left to the client (e.g.
+      // edit-and-resend via /truncate), which already supports this flow.
+      if (full === "" && lastUser && !body.skipUserPersist) {
+        log.warn("dangling user turn — stream produced no output", { requestId, conversationId, userId });
+      }
+      // Track stream failures separately so they are distinguishable from
+      // successful completions in the events table.
+      track("stream_error", {
+        userId,
+        modeId: body.modeId,
+        meta: { provider: body.provider ?? "openrouter" },
+      });
       await stream.writeSSE({ event: "error", data: JSON.stringify({ message }) });
     }
   });

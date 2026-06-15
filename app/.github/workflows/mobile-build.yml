@@ -30,6 +30,11 @@ jobs:
         run: pnpm --filter ./web build
         env:
           ARS_JWT_SECRET: ci
+          # Absolute hosted API origin baked into the bundle. Set repo variable
+          # ARS_API_BASE (Settings -> Variables). The build FAILS if unset for a
+          # packaged target — a relative /api 404s inside capacitor://localhost.
+          VITE_API_BASE: ${{ vars.ARS_API_BASE }}
+          ARS_PACKAGED_TARGET: capacitor
 
       - name: Add Android platform + sync
         working-directory: web
@@ -63,6 +68,11 @@ jobs:
       - run: pnpm --filter ./web build
         env:
           ARS_JWT_SECRET: ci
+          # Absolute hosted API origin baked into the bundle. Set repo variable
+          # ARS_API_BASE (Settings -> Variables). The build FAILS if unset for a
+          # packaged target — a relative /api 404s inside capacitor://localhost.
+          VITE_API_BASE: ${{ vars.ARS_API_BASE }}
+          ARS_PACKAGED_TARGET: capacitor
       - name: Generate iOS project
         working-directory: web
         run: |
