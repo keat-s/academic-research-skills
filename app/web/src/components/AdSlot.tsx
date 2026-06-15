@@ -14,15 +14,15 @@ export function AdSlot() {
   if (!cfg?.enabled || !cfg.publisherId) return null;
 
   return (
-    <div className="card text-xs text-slate-400">
-      <div className="mb-1 uppercase tracking-wide text-[10px] text-slate-500">Sponsor</div>
+    <div className="card text-xs text-muted-foreground">
+      <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">Sponsor</div>
       {/* EthicalAds renders into this container by data attributes. */}
       <div
         data-ea-publisher={cfg.publisherId}
         data-ea-type="text"
         data-ea-style="stickybox"
       />
-      <p className="mt-2 text-[10px] text-slate-600">{cfg.note}</p>
+      <p className="mt-2 text-[10px] text-[color:var(--text-subtle)]">{cfg.note}</p>
     </div>
   );
 }

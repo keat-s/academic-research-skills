@@ -35,8 +35,10 @@ export default {
           foreground: "hsl(var(--muted-foreground))",
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          // Scio owns --accent (solid teal); shadcn's hover-surface "accent"
+          // maps to Scio's soft teal tokens directly (not the hsl bridge).
+          DEFAULT: "var(--accent-soft)",
+          foreground: "var(--accent-text)",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -56,8 +58,10 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter Variable", "Inter", "system-ui", "sans-serif"],
-        serif: ["Source Serif 4", "Georgia", "serif"],
+        // Scio type system (tokens in src/scio/tokens/typography.css).
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "ui-serif", "Georgia", "serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SF Mono", "Menlo", "monospace"],
       },
       keyframes: {
         "accordion-down": {

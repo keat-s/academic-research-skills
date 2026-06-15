@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import { api, ApiError, type SourceRef, type ExportFormat } from "../api";
 import { downloadBlob } from "../download";
 
@@ -6,31 +7,49 @@ export function SourcesList({ sources }: { sources: SourceRef[] }) {
   const [open, setOpen] = useState(false);
   if (!sources || sources.length === 0) return null;
   return (
-    <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2 text-xs">
-      <button className="font-semibold text-indigo-300" onClick={() => setOpen(!open)}>
-        {open ? "▾" : "▸"} {sources.length} grounded source{sources.length > 1 ? "s" : ""}
+    <div className="mt-3 rounded-lg border border-border bg-[var(--surface-sunken)] p-2.5 text-xs">
+      <button
+        className="flex items-center gap-1.5 font-semibold text-[color:var(--accent-text)]"
+        onClick={() => setOpen(!open)}
+      >
+        {open ? <ChevronDown size={13} strokeWidth={2} /> : <ChevronRight size={13} strokeWidth={2} />}
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em]">
+          {sources.length} grounded source{sources.length > 1 ? "s" : ""}
+        </span>
       </button>
       {open && (
-        <ol className="mt-2 space-y-1 pl-4 text-slate-400">
+        <ol className="mt-2.5 space-y-2.5 pl-0">
           {sources.map((s, i) => (
-            <li key={i} className="list-decimal">
-              {s.authors.slice(0, 2).join(", ")}
-              {s.authors.length > 2 ? " et al." : ""}
-              {s.year ? ` (${s.year})` : ""}. {s.title}
-              {s.doi && (
-                <>
-                  {" "}
+            <li key={i} className="flex items-start gap-2">
+              <span className="mt-0.5 shrink-0 rounded bg-[var(--accent-soft)] px-1.5 py-0.5 font-mono text-[10px] leading-none text-[color:var(--accent-text)]">
+                {i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                {s.doi ? (
                   <a
-                    className="text-indigo-300 hover:underline"
                     href={`https://doi.org/${s.doi}`}
                     target="_blank"
                     rel="noreferrer"
+                    className="font-semibold text-foreground underline-offset-2 hover:underline"
                   >
-                    doi:{s.doi}
+                    {s.title}
                   </a>
-                </>
-              )}
-              <span className="ml-1 text-slate-600">[{s.source}]</span>
+                ) : (
+                  <span className="font-semibold text-foreground">{s.title}</span>
+                )}
+                <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                  {[
+                    s.authors.slice(0, 2).join(", ") + (s.authors.length > 2 ? " et al." : ""),
+                    s.source,
+                    s.year ? String(s.year) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {s.doi && (
+                    <span className="ml-1 text-[color:var(--text-subtle)]">doi:{s.doi}</span>
+                  )}
+                </p>
+              </div>
             </li>
           ))}
         </ol>
@@ -70,15 +89,19 @@ export function ExportMenu({ content, title }: { content: string; title: string 
 
   return (
     <div className="relative inline-block">
-      <button className="text-[11px] text-slate-500 hover:text-slate-300" onClick={() => setOpen(!open)}>
-        ⤓ Export
+      <button
+        className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setOpen(!open)}
+      >
+        <Download size={12} strokeWidth={2} />
+        Export
       </button>
       {open && (
-        <div className="absolute bottom-full z-10 mb-1 w-36 rounded-xl border border-white/10 bg-[#0e1628] p-1 shadow-xl shadow-black/40">
+        <div className="absolute bottom-full z-10 mb-1 w-36 rounded-xl border border-border bg-card p-1 shadow-[var(--shadow-sm)]">
           {FORMATS.map((f) => (
             <button
               key={f.id}
-              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-300 hover:bg-white/10"
+              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-foreground hover:bg-secondary transition-colors"
               onClick={() => doExport(f.id)}
             >
               {f.label}
@@ -86,7 +109,7 @@ export function ExportMenu({ content, title }: { content: string; title: string 
           ))}
         </div>
       )}
-      {error && <div className="mt-1 text-[11px] text-amber-300">{error}</div>}
+      {error && <div className="mt-1 text-[11px] text-[color:var(--ochre-500)]">{error}</div>}
     </div>
   );
 }
