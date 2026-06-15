@@ -1,0 +1,9 @@
+/* Scio design system — foundation tokens + webfonts.
+   Imported by web/src/index.css ahead of the Tailwind layers so the shadcn
+   bridge variables (defined in index.css) can reference these. */
+@import "./fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./tokens/elevation.css";
+@import "./tokens/motion.css";

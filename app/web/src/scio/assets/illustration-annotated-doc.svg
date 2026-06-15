@@ -1,0 +1,27 @@
+<svg width="320" height="200" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Document with margin annotations">
+  
+  <rect x="74" y="18" width="172" height="164" rx="8" fill="#FFFFFF" stroke="#E4E4DF" stroke-width="1.5"></rect>
+  
+  <g stroke="#D4D4CE" stroke-width="2.5" stroke-linecap="round">
+    <line x1="92" y1="42" x2="210" y2="42"></line>
+    <line x1="92" y1="58" x2="228" y2="58"></line>
+    <line x1="92" y1="74" x2="200" y2="74"></line>
+  </g>
+  
+  <rect x="90" y="86" width="120" height="13" rx="3" fill="#F1E4C2"></rect>
+  <line x1="92" y1="93" x2="204" y2="93" stroke="#8A6526" stroke-width="2.5" stroke-linecap="round"></line>
+  <g stroke="#D4D4CE" stroke-width="2.5" stroke-linecap="round">
+    <line x1="92" y1="110" x2="222" y2="110"></line>
+    <line x1="92" y1="126" x2="196" y2="126"></line>
+    <line x1="92" y1="142" x2="214" y2="142"></line>
+    <line x1="92" y1="158" x2="172" y2="158"></line>
+  </g>
+  
+  <line x1="210" y1="92" x2="248" y2="92" stroke="#2C7A72" stroke-width="1.5" stroke-dasharray="3 3"></line>
+  <circle cx="210" cy="92" r="3.5" fill="#2C7A72"></circle>
+  <rect x="248" y="78" width="58" height="40" rx="7" fill="#ECF5F3" stroke="#A9D2CB" stroke-width="1.5"></rect>
+  <g stroke="#2C7A72" stroke-width="2" stroke-linecap="round">
+    <line x1="258" y1="92" x2="296" y2="92"></line>
+    <line x1="258" y1="102" x2="284" y2="102"></line>
+  </g>
+</svg>

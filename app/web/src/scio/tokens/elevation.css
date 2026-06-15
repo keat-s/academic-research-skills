@@ -1,0 +1,22 @@
+/* ============================================================
+   SCIO · ELEVATION (shadows + rings)
+   Soft, low-spread, software-feeling. Cool-neutral tint.
+   ============================================================ */
+:root {
+  /* Ambient shadows — subtle, layered */
+  --shadow-xs:  0 1px 2px rgba(26, 32, 30, 0.05);
+  --shadow-sm:  0 1px 2px rgba(26, 32, 30, 0.05), 0 1px 1px rgba(26, 32, 30, 0.04);
+  --shadow-md:  0 2px 4px rgba(26, 32, 30, 0.06), 0 4px 10px rgba(26, 32, 30, 0.05);
+  --shadow-lg:  0 4px 8px rgba(26, 32, 30, 0.06), 0 12px 28px rgba(26, 32, 30, 0.08);
+  --shadow-xl:  0 8px 16px rgba(26, 32, 30, 0.08), 0 24px 56px rgba(26, 32, 30, 0.12);
+
+  /* Inset / sunken */
+  --shadow-inset: inset 0 1px 2px rgba(26, 32, 30, 0.06);
+
+  /* Focus ring (uses --focus-ring from colors.css) */
+  --ring-focus: 0 0 0 3px var(--focus-ring);
+  --ring-offset-focus: 0 0 0 2px var(--surface-card), 0 0 0 4px var(--focus-ring);
+
+  /* Accent glow for primary CTAs (very subtle) */
+  --shadow-accent: 0 1px 2px rgba(16, 47, 44, 0.18), 0 6px 16px rgba(44, 122, 114, 0.18);
+}

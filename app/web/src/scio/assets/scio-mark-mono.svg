@@ -1,0 +1,9 @@
+<svg width="56" height="56" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Scio">
+  <circle cx="24" cy="24" r="19" stroke="currentColor" stroke-width="3"></circle>
+  <circle cx="24" cy="24" r="9.5" fill="currentColor"></circle>
+  <g stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round">
+    <path d="M24 24 L24 14.8"></path>
+    <path d="M24 24 L31.9 28.6"></path>
+    <path d="M24 24 L16.1 28.6"></path>
+  </g>
+</svg>

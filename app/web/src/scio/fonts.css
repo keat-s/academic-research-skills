@@ -1,0 +1,5 @@
+/* Scio webfonts.
+   NOTE: Loaded from the Google Fonts CDN rather than self-hosted binaries.
+   The sandbox can't download font files; swap these for self-hosted woff2
+   when you have the licensed files. See readme.md → Visual Foundations. */
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
