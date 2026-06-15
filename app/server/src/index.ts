@@ -14,7 +14,7 @@ import { monetizeRoutes } from "./monetize.js";
 import { tipRoutes } from "./tips.js";
 import { edgeRateLimit } from "./edge_ratelimit.js";
 import { summary } from "./analytics.js";
-import { db, closeDb } from "./db.js";
+import { db, stmts, closeDb } from "./db.js";
 import { log } from "./logger.js";
 
 const app = new Hono();
@@ -139,6 +139,21 @@ if (process.env.NODE_ENV !== "test") {
   serve({ fetch: app.fetch, port }, (info) => {
     log.info("ARS Studio server started", { port: info.port, sharedKey: hasSharedKey });
   });
+
+  // Prune old analytics events on boot, then every 6 hours. Retains
+  // ARS_EVENT_RETENTION_DAYS (default 90) days of data; older rows are cheap
+  // to delete because events.created_at is indexed.
+  function pruneOldEvents(): void {
+    const cutoff = Date.now() - env.eventRetentionDays * 24 * 60 * 60_000;
+    try {
+      const { changes } = stmts.pruneEvents.run(cutoff);
+      if (changes > 0) log.info("pruned old events", { rows: changes, retentionDays: env.eventRetentionDays });
+    } catch (err) {
+      log.error("event prune failed", { err: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  pruneOldEvents();
+  setInterval(pruneOldEvents, 6 * 60 * 60_000).unref();
 
   // Graceful shutdown: flush the WAL and close SQLite before the process dies.
   // SIGTERM is sent by container runtimes (Docker, Fly.io, k8s); SIGINT is

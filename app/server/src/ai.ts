@@ -15,7 +15,7 @@ import {
 import { env, hasSharedKey } from "./env.js";
 import { stmts } from "./db.js";
 import { requireAuth } from "./auth.js";
-import { consume, getQuota, allowAction } from "./ratelimit.js";
+import { consume, refund, getQuota, allowAction } from "./ratelimit.js";
 import { ground } from "./grounding.js";
 import { loadUploadTexts } from "./uploads.js";
 import { track } from "./analytics.js";
@@ -175,6 +175,9 @@ aiRoutes.post("/chat", async (c) => {
   const apiKey = usingByok ? body.apiKey! : env.openrouterKey;
 
   // Local (Ollama) inference is the user's own compute — no key, no quota.
+  // Track whether we actually consumed a shared-key unit so the catch block
+  // can refund it on upstream failure (BYOK / Ollama never consume quota).
+  let quotaConsumed = false;
   if (!usingLocal && !usingByok) {
     if (!hasSharedKey) {
       return c.json({ error: "no_shared_key", message: "Add your own OpenRouter key to chat." }, 402);
@@ -185,6 +188,7 @@ aiRoutes.post("/chat", async (c) => {
         429
       );
     }
+    quotaConsumed = true;
   }
   // NOTE: track("chat") is emitted inside the stream handler on success or
   // failure — not here — so a failed generation is distinguishable from a
@@ -194,6 +198,11 @@ aiRoutes.post("/chat", async (c) => {
   const messages: ChatMessage[] = [{ role: "system", content: system }, ...body.messages];
 
   // Attach extracted text from uploaded documents (kept server-side).
+  // TRUST BOUNDARY: upload text is user-controlled and is injected verbatim
+  // into the system prompt. It must never be parsed as instructions by the
+  // server — it is treated as opaque data passed to the model, which must
+  // apply its own refusal/safety policy. No server-side content filtering is
+  // applied here (behavior change deferred; comment only per P2.6 spec).
   if (Array.isArray(body.uploadIds) && body.uploadIds.length > 0) {
     const docs = loadUploadTexts(userId, body.uploadIds);
     if (docs.length > 0) {
@@ -285,6 +294,20 @@ aiRoutes.post("/chat", async (c) => {
         err: message,
         stack: err instanceof Error ? err.stack : undefined,
       });
+      // Refund the quota unit when the provider returned zero output — the user
+      // got nothing and should not be charged a free turn. Only refund when we
+      // actually consumed a unit (not BYOK / Ollama paths).
+      if (quotaConsumed && full === "") {
+        refund(userId);
+        log.info("quota refunded after zero-output stream error", { requestId, conversationId, userId });
+      }
+      // A user turn was persisted before streaming. If the stream produced zero
+      // output the conversation has a dangling user message with no reply.
+      // Log it for observability; cleaning it up is left to the client (e.g.
+      // edit-and-resend via /truncate), which already supports this flow.
+      if (full === "" && lastUser && !body.skipUserPersist) {
+        log.warn("dangling user turn — stream produced no output", { requestId, conversationId, userId });
+      }
       // Track stream failures separately so they are distinguishable from
       // successful completions in the events table.
       track("stream_error", {

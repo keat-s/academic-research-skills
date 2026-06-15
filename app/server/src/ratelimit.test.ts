@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { db } from "./db.js";
-import { consume, getQuota } from "./ratelimit.js";
+import { consume, refund, getQuota } from "./ratelimit.js";
 
 /** Insert a minimal user row so the usage_daily FK is satisfied. */
 function seedUser(id: string) {
@@ -67,4 +67,35 @@ test("two users are independent (one exhausted, the other still has budget)", ()
 
   // B is untouched.
   assert.equal(consume(userB), true, "B should still have budget");
+});
+
+test("refund restores one unit so the next consume succeeds", () => {
+  const userId = randomUUID();
+  seedUser(userId);
+
+  // Exhaust the limit (3 in test env).
+  consume(userId);
+  consume(userId);
+  consume(userId);
+  assert.equal(consume(userId), false, "should be exhausted before refund");
+
+  // Refund one unit — the next consume should succeed again.
+  refund(userId);
+  assert.equal(consume(userId), true, "consume should succeed after refund");
+  // Now exhausted again.
+  assert.equal(consume(userId), false, "should be exhausted again after one post-refund consume");
+});
+
+test("refund never drives count below zero", () => {
+  const userId = randomUUID();
+  seedUser(userId);
+
+  // No units consumed yet; refund should be a no-op (MAX(0, 0-1) = 0).
+  refund(userId);
+  const today = new Date().toISOString().slice(0, 10);
+  const row = db
+    .prepare("SELECT count FROM usage_daily WHERE user_id = ? AND day = ?")
+    .get(userId, today) as { count: number } | undefined;
+  // Row may not exist at all if there was nothing to refund (UPDATE touches 0 rows).
+  if (row) assert.ok(row.count >= 0, "count must not go negative");
 });

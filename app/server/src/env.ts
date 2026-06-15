@@ -49,6 +49,12 @@ export const env = {
   saveRateWindowMs: Number(process.env.ARS_SAVE_RATE_WINDOW_MS ?? 60_000),
   // Hard ceiling on the per-request scholarly result count (client-supplied).
   searchLimitMax: Number(process.env.ARS_SEARCH_LIMIT_MAX ?? 25),
+  // Aggregate upload-text budget per user (chars). Default 5 MB of text
+  // (~5_000_000 chars). Overridable so operators can tighten or loosen the cap.
+  uploadBudgetChars: Number(process.env.ARS_UPLOAD_BUDGET_CHARS ?? 5_000_000),
+  // How many days of analytics events to retain. Older rows are pruned on boot
+  // (and at a recurring interval) to keep the events table bounded.
+  eventRetentionDays: Number(process.env.ARS_EVENT_RETENTION_DAYS ?? 90),
   // Local model (Ollama) base, used when a request asks for provider "ollama".
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   smtp: {

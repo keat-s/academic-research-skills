@@ -45,6 +45,17 @@ export function consume(userId: string): boolean {
   return res.changes > 0;
 }
 
+/**
+ * Refund one shared-key unit previously consumed via consume(). Call only when
+ * the upstream stream failed with zero output (provider outage). The UPDATE
+ * uses MAX(0, count - 1) so the counter never goes negative. Safe to call on
+ * BYOK/Ollama paths (where consume was never called) because the caller is
+ * expected to gate on the `quotaConsumed` flag before calling this.
+ */
+export function refund(userId: string): void {
+  stmts.refundUsage.run(userId, utcDay());
+}
+
 // --- Generic per-key fixed-window limiter (in-memory) -----------------------
 // Used to throttle auth-gated but quota-exempt actions per user (e.g. the
 // scholarly /search fan-out and /save writes). Single-node; for multi-instance

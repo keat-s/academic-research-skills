@@ -220,8 +220,11 @@ export const stmts = {
   insertMessage: db.prepare(
     "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)"
   ),
+  // Returns the most recent N messages in chronological order. N=500 is a
+  // generous cap; conversations beyond that size are extremely rare in practice
+  // and the cap prevents unbounded memory/network usage on the GET handler.
   messagesByConversation: db.prepare(
-    "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at"
+    "SELECT * FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 500) ORDER BY created_at"
   ),
   // k-th user message (1-based) of a conversation — anchor for truncation.
   kthUserMessageAt: db.prepare(
@@ -247,6 +250,12 @@ export const stmts = {
     "SELECT 1 FROM subscription WHERE referenceId = ? AND plan = ? AND status IN ('active','trialing') LIMIT 1"
   ),
 
+  // Refund one shared-key unit consumed by a failed stream. Uses MAX(0, ...)
+  // to guard against going negative if the row was somehow already pruned.
+  refundUsage: db.prepare(
+    "UPDATE usage_daily SET count = MAX(0, count - 1) WHERE user_id = ? AND day = ?"
+  ),
+
   insertEvent: db.prepare(
     "INSERT INTO events (user_id, name, mode_id, meta, created_at) VALUES (?, ?, ?, ?, ?)"
   ),
@@ -261,6 +270,12 @@ export const stmts = {
     "SELECT id, filename, mime, chars, created_at FROM uploads WHERE user_id = ? ORDER BY created_at DESC LIMIT 50"
   ),
   countUploadsByUser: db.prepare("SELECT COUNT(*) AS n FROM uploads WHERE user_id = ?"),
+  // Aggregate char count across all uploads for a user — used for the per-user
+  // upload byte budget check before accepting a new document.
+  sumUploadCharsByUser: db.prepare("SELECT COALESCE(SUM(chars), 0) AS total FROM uploads WHERE user_id = ?"),
+  // Delete analytics events older than a given epoch timestamp (ms). Called on
+  // boot and on a recurring interval (outside tests) to keep the table bounded.
+  pruneEvents: db.prepare("DELETE FROM events WHERE created_at < ?"),
   uploadById: db.prepare("SELECT * FROM uploads WHERE id = ? AND user_id = ?"),
   deleteUpload: db.prepare("DELETE FROM uploads WHERE id = ? AND user_id = ?"),
 };
