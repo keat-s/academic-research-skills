@@ -54,6 +54,15 @@ function trustedOrigins(): string[] {
   add(env.publicUrl);
   add(env.serverUrl);
   for (const o of env.corsOrigins) if (o && o !== "*") add(o);
+  // Dev convenience only: trust localhost on the common Vite dev ports so a
+  // bare `pnpm dev` works even when 5173 is taken and the web lands on 5174/75.
+  // Production stays strict (env-derived origins only).
+  if (process.env.NODE_ENV !== "production") {
+    for (const port of [5173, 5174, 5175]) {
+      add(`http://localhost:${port}`);
+      add(`http://127.0.0.1:${port}`);
+    }
+  }
   return [...set];
 }
 

@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto flex min-h-full max-w-sm flex-col justify-center px-6 py-12">
-      <h1 className="text-2xl font-bold text-white">{title}</h1>
+      <h1 className="text-2xl font-bold text-foreground">{title}</h1>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -38,14 +38,14 @@ export function VerifyPage() {
 
   return (
     <Shell title="Email verification">
-      {state === "working" && <p className="text-slate-400">Verifying…</p>}
+      {state === "working" && <p className="text-muted-foreground">Verifying…</p>}
       {state === "ok" && (
-        <p className="text-emerald-400">
-          Email verified. <Link to="/app" className="underline">Go to the studio →</Link>
+        <p style={{ color: "var(--success)" }}>
+          Email verified. <Link to="/app" className="underline">Go to the studio</Link>
         </p>
       )}
       {state === "fail" && (
-        <p className="text-rose-400">
+        <p className="text-destructive">
           This link is invalid or expired. <Link to="/app" className="underline">Open the app</Link> and
           resend from Settings.
         </p>
@@ -81,7 +81,7 @@ export function ResetPage() {
   if (!token) {
     return (
       <Shell title="Reset password">
-        <p className="text-rose-400">Missing reset token.</p>
+        <p className="text-destructive">Missing reset token.</p>
       </Shell>
     );
   }
@@ -98,7 +98,7 @@ export function ResetPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {error && <p className="text-sm text-rose-400">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <button className="btn-primary w-full" disabled={busy}>
           {busy ? "…" : "Set password"}
         </button>
@@ -122,5 +122,5 @@ export function OAuthCallbackPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <Shell title="Signing you in…"><p className="text-slate-400">One moment.</p></Shell>;
+  return <Shell title="Signing you in…"><p className="text-muted-foreground">One moment.</p></Shell>;
 }

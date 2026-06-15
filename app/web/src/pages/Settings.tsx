@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { api } from "../api";
 import { authClient } from "../lib/auth-client";
 import { useAuth } from "../auth";
@@ -100,19 +101,29 @@ export function Settings() {
 
   return (
     <div className="mx-auto max-w-xl px-6 py-10">
-      <Link to="/app" className="text-sm text-indigo-300 hover:underline">
-        ← Back to studio
+      <Link
+        to="/app"
+        className="inline-flex items-center gap-1.5 text-sm hover:underline"
+        style={{ color: "var(--text-link)" }}
+      >
+        <ArrowLeft size={14} strokeWidth={1.75} />
+        Back to studio
       </Link>
-      <h1 className="mt-4 text-2xl font-bold text-white">Settings</h1>
+      <h1 className="mt-4 text-2xl font-bold text-foreground">Settings</h1>
 
       <section className="card mt-6">
-        <div className="text-sm text-slate-400">Signed in as</div>
-        <div className="text-slate-100">{user?.email}</div>
+        <p
+          className="text-xs font-mono uppercase tracking-[0.08em]"
+          style={{ color: "var(--text-subtle)" }}
+        >
+          Signed in as
+        </p>
+        <div className="mt-0.5 text-foreground">{user?.email}</div>
         {user && user.emailVerified === false && (
-          <div className="mt-2 text-sm text-amber-300">
+          <div className="mt-2 text-sm" style={{ color: "var(--warning)" }}>
             Email not verified.{" "}
             {resent ? (
-              <span className="text-emerald-400">Verification sent.</span>
+              <span style={{ color: "var(--success)" }}>Verification sent.</span>
             ) : (
               <button className="underline" onClick={resend}>
                 Resend verification
@@ -127,34 +138,34 @@ export function Settings() {
 
       {supporterEnabled && (
         <section className="card mt-4 space-y-3">
-          <h2 className="font-semibold text-slate-200">Supporter</h2>
-          <p className="text-sm text-slate-400">
-            ARS Studio is free and open under CC BY-NC — and stays that way. Becoming a Supporter is
+          <h2 className="font-semibold text-foreground">Supporter</h2>
+          <p className="text-sm text-muted-foreground">
+            ARS Studio is free and open under CC BY-NC — and stays that way. Becoming a supporter is
             entirely optional: it never unlocks a core feature. It only raises your daily free
             message limit and adds a small thank-you badge. You can stop any time.
           </p>
           {subscription ? (
             <div className="space-y-2">
-              <p className="text-sm text-emerald-400">
-                You're a Supporter — thank you!{" "}
+              <p className="text-sm" style={{ color: "var(--success)" }}>
+                You're a supporter — thank you.{" "}
                 {subscription.cancelAtPeriodEnd && (
-                  <span className="text-amber-300">(ends at the period's close)</span>
+                  <span style={{ color: "var(--warning)" }}>(ends at the period's close)</span>
                 )}
               </p>
               <button className="btn-ghost" onClick={cancelSupporter} disabled={billingBusy}>
-                {billingBusy ? "…" : "Manage / cancel"}
+                {billingBusy ? "…" : "Manage or cancel"}
               </button>
             </div>
           ) : (
             <button className="btn-primary" onClick={becomeSupporter} disabled={billingBusy}>
-              {billingBusy ? "…" : "Become a Supporter"}
+              {billingBusy ? "…" : "Become a supporter"}
             </button>
           )}
         </section>
       )}
 
       <section className="card mt-4 space-y-3">
-        <h2 className="font-semibold text-slate-200">Inference backend</h2>
+        <h2 className="font-semibold text-foreground">Inference backend</h2>
         <div className="grid grid-cols-3 gap-2">
           <button
             className={settings.provider === "openrouter" ? "btn-primary" : "btn-ghost"}
@@ -191,7 +202,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">Free open models, proxied through the server.</p>
+            <p className="text-xs text-muted-foreground">Free open models, proxied through the server.</p>
           </>
         )}
 
@@ -209,7 +220,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Runs entirely in your browser via WebGPU — fully private, no key, no limit. The model
               downloads once on first use (cached afterward); larger models need more GPU memory.
             </p>
@@ -230,7 +241,7 @@ export function Settings() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Runs on your machine via Ollama — private, no key, no daily limit.
             </p>
           </>
@@ -240,8 +251,8 @@ export function Settings() {
       <section className="card mt-4 space-y-2">
         <label className="flex items-center justify-between">
           <div>
-            <div className="font-semibold text-slate-200">Citation grounding by default</div>
-            <div className="text-sm text-slate-400">
+            <div className="font-semibold text-foreground">Citation grounding by default</div>
+            <div className="mt-0.5 text-sm text-muted-foreground">
               Retrieve real sources (Crossref / OpenAlex / Semantic Scholar) before answering.
             </div>
           </div>
@@ -255,10 +266,16 @@ export function Settings() {
       </section>
 
       <section className="card mt-4 space-y-3">
-        <h2 className="font-semibold text-slate-200">Bring your own key (optional)</h2>
-        <p className="text-sm text-slate-400">
+        <h2 className="font-semibold text-foreground">Bring your own key (optional)</h2>
+        <p className="text-sm text-muted-foreground">
           Paste an{" "}
-          <a className="text-indigo-300 hover:underline" href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">
+          <a
+            style={{ color: "var(--text-link)" }}
+            className="hover:underline"
+            href="https://openrouter.ai/keys"
+            target="_blank"
+            rel="noreferrer"
+          >
             OpenRouter API key
           </a>{" "}
           to skip the daily free limit and unlock paid models. Stored only in this browser; sent
@@ -278,7 +295,11 @@ export function Settings() {
         )}
       </section>
 
-      {saved && <p className="mt-3 text-sm text-emerald-400">Saved.</p>}
+      {saved && (
+        <p className="mt-3 text-sm" style={{ color: "var(--success)" }}>
+          Saved.
+        </p>
+      )}
     </div>
   );
 }
