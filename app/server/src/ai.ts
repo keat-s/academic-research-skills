@@ -15,7 +15,7 @@ import {
 import { env, hasSharedKey } from "./env.js";
 import { stmts } from "./db.js";
 import { requireAuth } from "./auth.js";
-import { consume, getQuota } from "./ratelimit.js";
+import { consume, getQuota, allowAction } from "./ratelimit.js";
 import { ground } from "./grounding.js";
 import { loadUploadTexts } from "./uploads.js";
 import { track } from "./analytics.js";
@@ -49,10 +49,19 @@ aiRoutes.get("/local-models", async (c) => {
 // Scholarly retrieval only (no LLM, no quota). Powers citation grounding for
 // the in-browser WebLLM path, where generation happens client-side.
 aiRoutes.post("/search", async (c) => {
+  const userId = c.get("userId") as string;
+  if (!allowAction(`search:${userId}`, env.searchRateMax, env.searchRateWindowMs)) {
+    c.header("Retry-After", String(Math.ceil(env.searchRateWindowMs / 1000)));
+    return c.json({ error: "rate_limited", message: "Too many searches. Slow down." }, 429);
+  }
   const body = await c.req.json().catch(() => ({}));
   const query = String(body.query ?? "").trim();
   if (!query) return c.json({ sources: [] });
-  const sources = await searchScholarly(query.slice(0, 300), { limit: Number(body.limit ?? 6) });
+  // Clamp the client-supplied result count: it drives a 3-provider external
+  // fan-out, so an unbounded value is an amplification vector.
+  const reqLimit = Number(body.limit);
+  const limit = Math.min(env.searchLimitMax, Math.max(1, Number.isFinite(reqLimit) ? reqLimit : 6));
+  const sources = await searchScholarly(query.slice(0, 300), { limit });
   return c.json({ sources });
 });
 
@@ -60,6 +69,10 @@ aiRoutes.post("/search", async (c) => {
 // user's own device did the inference.
 aiRoutes.post("/save", async (c) => {
   const userId = c.get("userId") as string;
+  if (!allowAction(`save:${userId}`, env.saveRateMax, env.saveRateWindowMs)) {
+    c.header("Retry-After", String(Math.ceil(env.saveRateWindowMs / 1000)));
+    return c.json({ error: "rate_limited", message: "Too many writes. Slow down." }, 429);
+  }
   const body = (await c.req.json().catch(() => null)) as
     | { conversationId?: string; modeId: string; userText: string; assistantText: string }
     | null;

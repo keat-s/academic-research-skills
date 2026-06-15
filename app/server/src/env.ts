@@ -36,6 +36,19 @@ export const env = {
   // Edge abuse limits (per IP).
   ipRateWindowMs: Number(process.env.ARS_IP_RATE_WINDOW_MS ?? 60_000),
   ipRateMax: Number(process.env.ARS_IP_RATE_MAX ?? 120),
+  // Trust X-Forwarded-For / X-Real-IP for the client IP. Enable ONLY when this
+  // server sits behind a reverse proxy that sets these headers. When false
+  // (default), the rate limiter keys on the real socket address, which a remote
+  // client cannot spoof — otherwise rotating XFF per request defeats the limiter.
+  trustProxy: (process.env.ARS_TRUST_PROXY ?? "false") === "true",
+  // Per-user limits on the auth-gated but quota-exempt scholarly endpoints
+  // (/api/ai/search fans out to 3 external APIs; /api/ai/save writes rows).
+  searchRateMax: Number(process.env.ARS_SEARCH_RATE_MAX ?? 20),
+  searchRateWindowMs: Number(process.env.ARS_SEARCH_RATE_WINDOW_MS ?? 60_000),
+  saveRateMax: Number(process.env.ARS_SAVE_RATE_MAX ?? 60),
+  saveRateWindowMs: Number(process.env.ARS_SAVE_RATE_WINDOW_MS ?? 60_000),
+  // Hard ceiling on the per-request scholarly result count (client-supplied).
+  searchLimitMax: Number(process.env.ARS_SEARCH_LIMIT_MAX ?? 25),
   // Local model (Ollama) base, used when a request asks for provider "ollama".
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   smtp: {
@@ -80,6 +93,13 @@ export const env = {
 // forgeable by anyone who has read this source.
 if (process.env.NODE_ENV === "production" && env.jwtSecret === "dev-insecure-secret-change-me") {
   throw new Error("ARS_JWT_SECRET must be set to a strong random value in production.");
+}
+
+// Refuse to boot in production with a wildcard CORS origin — it would let any
+// web origin drive the authenticated API. Set ARS_CORS_ORIGINS to an explicit
+// comma-separated allowlist in production.
+if (process.env.NODE_ENV === "production" && env.corsOrigins.includes("*")) {
+  throw new Error("ARS_CORS_ORIGINS must be an explicit allowlist in production; wildcard '*' is refused.");
 }
 
 export const hasSharedKey = env.openrouterKey.length > 0;

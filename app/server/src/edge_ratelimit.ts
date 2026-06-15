@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import type { HttpBindings } from "@hono/node-server";
 import { env } from "./env.js";
 
 // In-memory fixed-window rate limit per client IP. Cheap abuse protection in
@@ -8,9 +9,19 @@ import { env } from "./env.js";
 const buckets = new Map<string, { count: number; reset: number }>();
 
 function clientIp(c: Context): string {
-  const fwd = c.req.header("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0]!.trim();
-  return c.req.header("x-real-ip") ?? "local";
+  // Only trust client-supplied forwarding headers when explicitly configured to
+  // sit behind a trusted proxy. Otherwise a remote caller can rotate
+  // X-Forwarded-For per request and land in a fresh bucket every time, fully
+  // neutralizing this limiter (the only abuse guard on /api/auth/* and /api/ai/*).
+  if (env.trustProxy) {
+    const fwd = c.req.header("x-forwarded-for");
+    if (fwd) return fwd.split(",")[0]!.trim();
+    const real = c.req.header("x-real-ip");
+    if (real) return real.trim();
+  }
+  // Unspoofable: the real TCP peer address from the Node socket.
+  const socket = (c.env as HttpBindings).incoming?.socket;
+  return socket?.remoteAddress ?? "local";
 }
 
 export async function edgeRateLimit(c: Context, next: Next) {

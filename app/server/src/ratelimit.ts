@@ -34,11 +34,34 @@ export function getQuota(userId: string): Quota {
 
 /**
  * Try to consume one shared-key unit. Returns false when the daily free budget
- * is exhausted (the caller should then prompt for BYOK or a tip).
+ * is exhausted (the caller should then prompt for BYOK or a tip). The check and
+ * increment happen in a single atomic SQL statement (no read-then-write race),
+ * which matters the moment the app runs multi-instance / multi-connection.
  */
 export function consume(userId: string): boolean {
-  const { remaining } = getQuota(userId);
-  if (remaining <= 0) return false;
-  stmts.upsertUsage.run(userId, utcDay());
+  const limit = isSupporter(userId) ? env.supporterDailyMessages : env.freeDailyMessages;
+  if (!Number.isFinite(limit) || limit <= 0) return false;
+  const res = stmts.consumeIfUnder.run(userId, utcDay(), limit);
+  return res.changes > 0;
+}
+
+// --- Generic per-key fixed-window limiter (in-memory) -----------------------
+// Used to throttle auth-gated but quota-exempt actions per user (e.g. the
+// scholarly /search fan-out and /save writes). Single-node; for multi-instance
+// front these with a shared store, same as edge_ratelimit.
+const actionBuckets = new Map<string, { count: number; reset: number }>();
+
+export function allowAction(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const b = actionBuckets.get(key);
+  if (!b || b.reset < now) {
+    actionBuckets.set(key, { count: 1, reset: now + windowMs });
+  } else {
+    if (b.count >= max) return false;
+    b.count++;
+  }
+  if (actionBuckets.size > 10_000) {
+    for (const [k, v] of actionBuckets) if (v.reset < now) actionBuckets.delete(k);
+  }
   return true;
 }

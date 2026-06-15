@@ -216,9 +216,14 @@ export const stmts = {
   ),
 
   getUsage: db.prepare("SELECT count FROM usage_daily WHERE user_id = ? AND day = ?"),
-  upsertUsage: db.prepare(`
+  // Atomic gated consume: increments only while strictly under the limit.
+  // First message of the day inserts count=1; subsequent ones increment only
+  // when the existing count is below :limit. `changes` is 1 iff a unit was
+  // consumed, 0 when the limit is reached — no read-then-write race.
+  consumeIfUnder: db.prepare(`
     INSERT INTO usage_daily (user_id, day, count) VALUES (?, ?, 1)
     ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1
+      WHERE usage_daily.count < ?
   `),
 
   // Active "supporter" subscription lookup (drives the raised free quota).
