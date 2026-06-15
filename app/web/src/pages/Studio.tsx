@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  BookOpen,
+  PenLine,
+  Search,
+  Compass,
+  Paperclip,
+  Menu,
+  X,
+  Trash2,
+  Sparkles,
+  Heart,
+  Settings,
+  Square,
+  Play,
+  SendHorizontal,
+  FileText,
+  type LucideProps,
+} from "lucide-react";
 import type { Mode } from "@ars/core";
 import { api, type Conversation, type UploadInfo } from "../api";
 import { useAuth } from "../auth";
@@ -13,6 +31,7 @@ import { SuggestedActions } from "../components/chat/SuggestedActions";
 import { ModelPicker } from "../components/chat/ModelPicker";
 import { MessageReasoning } from "../components/chat/MessageReasoning";
 import { MessageActions } from "../components/chat/MessageActions";
+import scioMark from "../scio/assets/scio-mark.svg";
 
 /**
  * Split a leading <think>…</think> block (emitted by reasoning models such as
@@ -27,54 +46,46 @@ function splitReasoning(content: string): { reasoning: string | null; body: stri
   return { reasoning: null, body: content };
 }
 
+type SkillIconComponent = React.ComponentType<LucideProps>;
+
 interface SkillMeta {
   label: string;
-  icon: string;
+  Icon: SkillIconComponent;
   /** One-line "what this skill does" — drives the capability cards. */
   desc: string;
-  accent: string;
-  ring: string;
-  /** Dot color for the capability card + flow strip. */
-  dot: string;
+  /** Dot color var for the capability card + flow strip. */
+  dotVar: string;
   /** Display order (also the recommended pipeline order). */
   order: number;
 }
 
 const SKILL_META: Record<string, SkillMeta> = {
   "deep-research": {
-    label: "Deep Research",
-    icon: "📚",
+    label: "Deep research",
+    Icon: BookOpen,
     desc: "Investigate a question end-to-end — multi-agent search, fact-checking, and literature reviews.",
-    accent: "text-sky-300 border-sky-400/30 bg-sky-400/10",
-    ring: "hover:border-sky-400/40",
-    dot: "bg-sky-400",
+    dotVar: "var(--teal-500)",
     order: 0,
   },
   "academic-paper": {
-    label: "Academic Paper",
-    icon: "✍️",
+    label: "Academic paper",
+    Icon: PenLine,
     desc: "Turn research into a publication — outline, draft, revise, and bilingual abstracts.",
-    accent: "text-violet-300 border-violet-400/30 bg-violet-400/10",
-    ring: "hover:border-violet-400/40",
-    dot: "bg-violet-400",
+    dotVar: "var(--blue-500)",
     order: 1,
   },
   "academic-paper-reviewer": {
-    label: "Paper Reviewer",
-    icon: "🔍",
+    label: "Paper reviewer",
+    Icon: Search,
     desc: "Multi-perspective peer review — five reviewers plus a decision letter and revision roadmap.",
-    accent: "text-amber-300 border-amber-400/30 bg-amber-400/10",
-    ring: "hover:border-amber-400/40",
-    dot: "bg-amber-400",
+    dotVar: "var(--ochre-500)",
     order: 2,
   },
   "academic-pipeline": {
-    label: "Full Pipeline",
-    icon: "🧭",
+    label: "Full pipeline",
+    Icon: Compass,
     desc: "The whole journey orchestrated — research → write → integrity → review → finalize.",
-    accent: "text-emerald-300 border-emerald-400/30 bg-emerald-400/10",
-    ring: "hover:border-emerald-400/40",
-    dot: "bg-emerald-400",
+    dotVar: "var(--green-500)",
     order: 3,
   },
 };
@@ -174,19 +185,17 @@ export function Studio() {
     <div className="flex h-full">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-20 flex w-72 transform flex-col border-r border-white/10 bg-[#0b1220]/95 p-3 backdrop-blur transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-20 flex w-72 transform flex-col border-r border-border bg-card p-3 transition-transform md:static md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex items-center justify-between px-1">
-          <button onClick={newChat} className="flex items-center gap-2 text-base font-bold text-white">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 font-serif text-sm shadow-md shadow-indigo-500/30">
-              A
-            </span>
-            ARS Studio
+          <button onClick={newChat} className="flex items-center gap-2.5">
+            <img src={scioMark} alt="" className="h-7 w-7" />
+            <span className="text-base font-bold text-foreground">ARS Studio</span>
           </button>
-          <button className="text-slate-400 md:hidden" onClick={() => setSidebarOpen(false)}>
-            ✕
+          <button className="text-muted-foreground md:hidden" onClick={() => setSidebarOpen(false)}>
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
 
@@ -195,17 +204,17 @@ export function Studio() {
         </button>
 
         <div className="mt-4 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-1">
-          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+          <div className="px-1 pb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">
             Recent
           </div>
           {conversations.length === 0 && (
-            <p className="px-1 py-2 text-sm text-slate-600">No chats yet.</p>
+            <p className="px-1 py-2 text-sm text-muted-foreground">No chats yet.</p>
           )}
           {conversations.map((c) => (
             <div
               key={c.id}
               className={`group flex items-center rounded-lg transition-colors ${
-                c.id === id ? "bg-white/10" : "hover:bg-white/5"
+                c.id === id ? "bg-secondary" : "hover:bg-muted"
               }`}
             >
               <button
@@ -214,7 +223,7 @@ export function Studio() {
                   setSidebarOpen(false);
                 }}
                 className={`min-w-0 flex-1 truncate px-2.5 py-2 text-left text-sm ${
-                  c.id === id ? "text-white" : "text-slate-300"
+                  c.id === id ? "text-foreground" : "text-muted-foreground"
                 }`}
                 title={c.title}
               >
@@ -222,38 +231,38 @@ export function Studio() {
               </button>
               <button
                 onClick={() => removeConversation(c.id)}
-                className="mr-1 hidden rounded p-1 text-xs text-slate-500 hover:text-rose-300 group-hover:block"
+                className="mr-1 hidden rounded p-1 text-muted-foreground hover:text-destructive group-hover:block"
                 title="Delete"
               >
-                🗑
+                <Trash2 size={14} strokeWidth={2} />
               </button>
             </div>
           ))}
         </div>
 
-        <div className="mt-3 space-y-2 border-t border-white/5 pt-3">
+        <div className="mt-3 space-y-2 border-t border-border pt-3">
           {quota && (
-            <div className="px-1 text-xs text-slate-500">
-              <div className="mb-1 flex justify-between">
+            <div className="px-1 font-mono text-xs text-[color:var(--text-subtle)]">
+              <div className="mb-1 flex justify-between uppercase tracking-[0.08em] text-[10px]">
                 <span>Free messages today</span>
                 <span>
                   {quota.remaining}/{quota.limit}
                 </span>
               </div>
-              <div className="h-1 overflow-hidden rounded-full bg-white/10">
+              <div className="h-1 overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+                  className="h-full rounded-full bg-primary transition-all"
                   style={{ width: `${(quota.remaining / Math.max(1, quota.limit)) * 100}%` }}
                 />
               </div>
             </div>
           )}
           <div className="flex gap-2 text-sm">
-            <Link to="/support" className="btn-ghost flex-1">
-              ☕ Support
+            <Link to="/support" className="btn-ghost flex flex-1 items-center justify-center gap-1.5">
+              <Heart size={14} strokeWidth={2} /> Support
             </Link>
-            <Link to="/settings" className="btn-ghost flex-1">
-              ⚙️ Settings
+            <Link to="/settings" className="btn-ghost flex flex-1 items-center justify-center gap-1.5">
+              <Settings size={14} strokeWidth={2} /> Settings
             </Link>
           </div>
         </div>
@@ -261,11 +270,11 @@ export function Studio() {
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-white/10 px-4 py-2 md:hidden">
+        <header className="flex items-center gap-3 border-b border-border bg-background px-4 py-2 md:hidden">
           <button className="btn-ghost px-3 py-1.5" onClick={() => setSidebarOpen(true)}>
-            ☰
+            <Menu size={16} strokeWidth={2} />
           </button>
-          <span className="truncate font-semibold">{activeMode?.title ?? "ARS Studio"}</span>
+          <span className="truncate font-semibold text-foreground">{activeMode?.title ?? "ARS Studio"}</span>
         </header>
 
         {!activeMode ? (
@@ -321,41 +330,48 @@ function ModeLauncher({
 
   return (
     <div className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto p-6 animate-fade-up">
-      <h1 className="text-2xl font-bold text-white">
+      <h1 className="text-2xl font-bold text-foreground">
         {userName ? `Hi ${userName} — what are you working on?` : "What are you working on?"}
       </h1>
-      <p className="mt-1 text-slate-400">
+      <p className="mt-1 text-muted-foreground">
         {modes.length} workflows across four research skills — from a single question to a finished,
         peer-reviewed paper.
       </p>
 
       {/* Recommended pipeline flow — communicates the end-to-end journey at a glance. */}
-      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-        <span className="font-semibold uppercase tracking-widest text-slate-600">Typical flow</span>
-        {SKILL_ORDER.slice(0, 3).map((s, i) => (
-          <span key={s} className="flex items-center gap-2">
-            {i > 0 && <span className="text-slate-700">→</span>}
-            <button
-              onClick={() => {
-                setActiveSkill(s);
-                setQ("");
-              }}
-              className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-slate-300 transition-colors hover:border-white/25 hover:bg-white/5"
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${SKILL_META[s]?.dot}`} />
-              {SKILL_META[s]?.label}
-            </button>
-          </span>
-        ))}
-        <span className="text-slate-700">→</span>
+      <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">Typical flow</span>
+        {SKILL_ORDER.slice(0, 3).map((s, i) => {
+          const meta = SKILL_META[s];
+          return (
+            <span key={s} className="flex items-center gap-2">
+              {i > 0 && <span className="text-[color:var(--border-default)]">→</span>}
+              <button
+                onClick={() => {
+                  setActiveSkill(s);
+                  setQ("");
+                }}
+                className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-muted-foreground transition-colors hover:border-[color:var(--border-strong)] hover:bg-muted"
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: meta?.dotVar }}
+                />
+                {meta?.label}
+              </button>
+            </span>
+          );
+        })}
+        <span className="text-[color:var(--border-default)]">→</span>
         <button
           onClick={() => {
             setActiveSkill("academic-pipeline");
             setQ("");
           }}
-          className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-emerald-300 transition-colors hover:border-emerald-400/40"
+          className="chip flex items-center gap-1.5"
         >
-          🧭 or run the whole pipeline
+          <Compass size={13} strokeWidth={2} />
+          or run the whole pipeline
         </button>
       </div>
 
@@ -365,6 +381,7 @@ function ModeLauncher({
           const meta = SKILL_META[skill];
           if (!meta) return null;
           const active = activeSkill === skill;
+          const { Icon } = meta;
           return (
             <button
               key={skill}
@@ -374,16 +391,21 @@ function ModeLauncher({
               }}
               className={`rounded-2xl border p-3.5 text-left transition-all duration-150 hover:-translate-y-0.5 ${
                 active
-                  ? `${meta.accent} ring-1 ring-inset`
-                  : `border-white/10 bg-white/[0.03] ${meta.ring}`
+                  ? "border-[color:var(--border-accent)] bg-accent/30 ring-1 ring-inset ring-[color:var(--border-accent)]"
+                  : "border-border bg-card hover:border-[color:var(--border-strong)]"
               }`}
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">{meta.icon}</span>
-                <span className="font-semibold text-slate-100">{meta.label}</span>
+                <span
+                  className="flex h-7 w-7 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: `color-mix(in srgb, ${meta.dotVar} 12%, transparent)` }}
+                >
+                  <Icon size={15} strokeWidth={2} style={{ color: meta.dotVar }} />
+                </span>
+                <span className="font-semibold text-foreground">{meta.label}</span>
               </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{meta.desc}</p>
-              <div className="mt-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{meta.desc}</p>
+              <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">
                 {counts[skill] ?? 0} {counts[skill] === 1 ? "mode" : "modes"}
               </div>
             </button>
@@ -413,43 +435,50 @@ function ModeLauncher({
 
       <div className="mt-6 space-y-8 pb-8">
         {grouped.length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">
-            No modes match “{q}”. <button className="underline" onClick={() => setQ("")}>Clear search</button>.
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No modes match "{q}".{" "}
+            <button className="underline" onClick={() => setQ("")}>
+              Clear search
+            </button>
+            .
           </p>
         )}
         {grouped.map(([skill, list]) => {
           const meta = SKILL_META[skill];
+          const { Icon } = meta ?? { Icon: BookOpen };
           return (
             <section key={skill}>
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
-                <span>{meta?.icon}</span>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Icon size={15} strokeWidth={2} style={{ color: meta?.dotVar }} />
                 {meta?.label ?? skill}
-                <span className="text-xs font-normal text-slate-600">· {list.length} modes</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">
+                  · {list.length} modes
+                </span>
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 {list.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => onPick(m)}
-                    className={`card group/mode text-left transition-all duration-150 hover:-translate-y-0.5 hover:bg-white/[0.07] ${meta?.ring ?? ""}`}
+                    className="card group/mode text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-[color:var(--border-accent)]"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-slate-100">{m.title}</span>
+                      <span className="font-semibold text-foreground">{m.title}</span>
                       {m.conversational && (
-                        <Badge variant="outline" className={meta?.accent}>
+                        <Badge variant="outline" className="chip">
                           dialogue
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{m.blurb}</p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{m.blurb}</p>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="secondary" className="font-normal">
+                      <Badge variant="secondary" className="font-mono text-[10px] uppercase tracking-[0.06em] font-normal">
                         {m.output}
                       </Badge>
-                      <Badge variant="secondary" className="font-normal">
+                      <Badge variant="secondary" className="font-mono text-[10px] uppercase tracking-[0.06em] font-normal">
                         {m.oversight} oversight
                       </Badge>
-                      <span className="text-[10px] uppercase tracking-wider text-slate-600">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">
                         {m.spectrum}
                       </span>
                     </div>
@@ -509,34 +538,36 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
   }
 
   const lastIndex = chat.messages.length - 1;
+  const { Icon: SkillIcon } = meta ?? { Icon: BookOpen };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="hidden items-center gap-2.5 border-b border-white/10 px-5 py-2.5 md:flex">
-        <span className={`chip border ${meta?.accent ?? ""}`}>
-          {meta?.icon} {meta?.label}
+      <div className="hidden items-center gap-2.5 border-b border-border bg-background px-5 py-2.5 md:flex">
+        <span className="chip flex items-center gap-1.5">
+          <SkillIcon size={13} strokeWidth={2} />
+          {meta?.label}
         </span>
-        <span className="font-semibold text-slate-100">{mode.title}</span>
-        <span className="text-xs text-slate-500">· {mode.output}</span>
+        <span className="font-semibold text-foreground">{mode.title}</span>
+        <span className="font-mono text-xs text-[color:var(--text-subtle)]">· {mode.output}</span>
         <ModelPicker className="ml-auto" />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-background">
         <div className="mx-auto max-w-3xl px-4 py-6">
           {chat.messages.length === 0 && (
             <div className="animate-fade-up">
               <div className="card">
-                <p className="text-slate-300">
+                <p className="text-foreground">
                   You're in <b>{mode.title}</b> mode — {mode.blurb}
                 </p>
-                <p className="mt-2 text-sm text-slate-500">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {mode.conversational
                     ? "This is a guided dialogue. Start by telling me what you're thinking about."
-                    : "Describe the task or paste your material to begin. Attach a PDF with 📎 if you have one."}
+                    : "Describe the task or paste your material to begin. Attach a PDF with the paperclip if you have one."}
                 </p>
               </div>
               <div className="mt-4">
-                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">
+                <div className="mb-2 px-1 font-mono text-[11px] uppercase tracking-[0.08em] text-[color:var(--text-subtle)]">
                   Try a starter
                 </div>
                 <SuggestedActions mode={mode} onPick={(text) => setInput(text)} />
@@ -566,12 +597,14 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
           ))}
 
           {chat.status === "grounding" && (
-            <div className="my-2 flex items-center gap-2 text-sm text-indigo-300 animate-fade-up">
-              <Spinner /> Searching scholarly databases…
+            <div className="my-2 flex items-center gap-2 text-sm text-[color:var(--accent-text)] animate-fade-up">
+              <Spinner />
+              <span>Reading the literature</span>
+              <span className="scio-thinking-dots"><i /><i /><i /></span>
             </div>
           )}
           {chat.status?.startsWith("loading_model") && (
-            <div className="my-2 flex items-center gap-2 text-sm text-indigo-300 animate-fade-up">
+            <div className="my-2 flex items-center gap-2 text-sm text-[color:var(--accent-text)] animate-fade-up">
               <Spinner /> Loading local model{" "}
               {chat.status.includes(":") ? `(${chat.status.split(":")[1]}%)` : "…"} — downloads
               once, then it's cached.
@@ -579,7 +612,7 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
           )}
 
           {chat.error && (
-            <div className="card mt-3 border-rose-500/40 text-sm text-rose-300 animate-fade-up">
+            <div className="card mt-3 border-destructive/40 text-sm text-destructive animate-fade-up">
               {chat.error}
               {/quota|limit|key/i.test(chat.error) && (
                 <>
@@ -600,22 +633,23 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
         </div>
       </div>
 
-      <form onSubmit={submit} className="border-t border-white/10 bg-[#0b1220]/60 p-3 backdrop-blur">
+      <form onSubmit={submit} className="border-t border-border bg-card p-3">
         <div className="mx-auto max-w-3xl">
           {attachments.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {attachments.map((a) => (
                 <span
                   key={a.id}
-                  className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs text-slate-200"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs text-foreground"
                 >
-                  📄 {a.filename}
+                  <FileText size={12} strokeWidth={2} />
+                  {a.filename}
                   <button
                     type="button"
-                    className="text-slate-400 hover:text-rose-300"
+                    className="text-muted-foreground hover:text-destructive"
                     onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
                   >
-                    ✕
+                    <X size={12} strokeWidth={2} />
                   </button>
                 </span>
               ))}
@@ -637,7 +671,7 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
             >
-              {uploading ? <Spinner /> : "📎"}
+              {uploading ? <Spinner /> : <Paperclip size={16} strokeWidth={2} />}
             </button>
             <textarea
               className="input max-h-40 min-h-[46px] resize-y"
@@ -653,29 +687,30 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
               }}
             />
             {chat.streaming ? (
-              <button type="button" className="btn-ghost" onClick={chat.stop}>
-                ◼ Stop
+              <button type="button" className="btn-ghost flex items-center gap-1.5" onClick={chat.stop}>
+                <Square size={14} strokeWidth={2} /> Stop
               </button>
             ) : chat.stopped ? (
-              <button type="button" className="btn-primary" onClick={chat.continueGeneration}>
-                ▸ Continue
+              <button type="button" className="btn-primary flex items-center gap-1.5" onClick={chat.continueGeneration}>
+                <Play size={14} strokeWidth={2} /> Continue
               </button>
             ) : (
-              <button className="btn-primary" disabled={!input.trim()}>
-                Send
+              <button className="btn-primary flex items-center gap-1.5" disabled={!input.trim()}>
+                <SendHorizontal size={14} strokeWidth={2} /> Send
               </button>
             )}
           </div>
           <div className="mt-1.5 flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-400">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
               <input
                 type="checkbox"
                 checked={grounding}
                 onChange={(e) => setGrounding(e.target.checked)}
               />
-              🔎 Ground citations (retrieve real sources)
+              <Sparkles size={12} strokeWidth={2} />
+              Ground citations (retrieve real sources)
             </label>
-            <p className="text-[11px] text-slate-600">Verify every citation · Enter to send</p>
+            <p className="font-mono text-[11px] text-[color:var(--text-subtle)]">Verify every citation · Enter to send</p>
           </div>
         </div>
       </form>
@@ -685,7 +720,7 @@ function ChatView({ mode, chat }: { mode: Mode; chat: UseChat }) {
 
 function Spinner() {
   return (
-    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-400/30 border-t-indigo-300" />
+    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[color:var(--accent-soft)] border-t-[color:var(--accent)]" />
   );
 }
 
@@ -729,7 +764,7 @@ function MessageBubble({
   if (isUser && editing) {
     return (
       <div className="my-3 flex justify-end animate-fade-up">
-        <div className="w-full max-w-[85%] rounded-2xl border border-indigo-400/40 bg-indigo-500/10 p-3">
+        <div className="w-full max-w-[85%] rounded-2xl border border-[color:var(--border-accent)] bg-accent/20 p-3">
           <textarea
             className="input min-h-[80px]"
             value={draft}
@@ -749,7 +784,7 @@ function MessageBubble({
               disabled={!draft.trim()}
               onClick={() => onSaveEdit(draft)}
             >
-              Save & resend
+              Save and resend
             </button>
           </div>
         </div>
@@ -763,8 +798,8 @@ function MessageBubble({
         <div
           className={`rounded-2xl px-4 py-3 ${
             isUser
-              ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/20"
-              : "border border-white/10 bg-white/[0.05] text-slate-100"
+              ? "bg-primary text-primary-foreground shadow-[var(--shadow-sm)]"
+              : "border border-border bg-card text-foreground"
           }`}
         >
           {isUser ? (
@@ -773,7 +808,7 @@ function MessageBubble({
             <>
               {reasoning && <MessageReasoning reasoning={reasoning} />}
               <Markdown>{body}</Markdown>
-              {streaming && <span className="cursor-blink ml-0.5 text-indigo-300">▍</span>}
+              {streaming && <span className="cursor-blink ml-0.5 text-[color:var(--accent-text)]">▍</span>}
               {message.sources && <SourcesList sources={message.sources} />}
             </>
           )}
